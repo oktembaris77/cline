@@ -13,6 +13,8 @@ import { preserveEscaping } from "@/shared/string"
 import { ClineDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
+// --- CUSTOM START: Change Summary ---
+import { recordFileChange } from "../../utils/changeTracking"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -22,6 +24,8 @@ import { type FileOpsResult, FileProviderOperations } from "../utils/FileProvide
 import { PatchParser } from "../utils/PatchParser"
 import { PathResolver } from "../utils/PathResolver"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
+
+// --- CUSTOM END ---
 
 interface FileChange {
 	type: PatchActionType
@@ -321,6 +325,10 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 					} else {
 						applyResults[originalPath] = fileResult
 					}
+
+					// --- CUSTOM START: Change Summary ---
+					recordFileChange(config.taskState, operationPath, change.oldContent || "", change.newContent || "")
+					// --- CUSTOM END ---
 				}
 
 				// Reset provider state to ensure clean state for the next file operation

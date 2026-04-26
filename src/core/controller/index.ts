@@ -984,6 +984,11 @@ export class Controller {
 			banners,
 			welcomeBanners,
 			openAiCodexIsAuthenticated,
+			// --- CUSTOM START: Change Summary ---
+			fileChanges: this.task?.taskState.fileChanges
+				? Object.fromEntries(this.task.taskState.fileChanges.entries())
+				: undefined,
+			// --- CUSTOM END ---
 		}
 	}
 

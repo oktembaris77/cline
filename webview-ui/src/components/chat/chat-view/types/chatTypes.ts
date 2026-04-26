@@ -56,6 +56,11 @@ export interface ChatState {
 	clearExpandedRows: () => void
 	resetState: () => void
 
+	// --- CUSTOM START: Change Summary ---
+	showChangeSummary: boolean
+	setShowChangeSummary: React.Dispatch<React.SetStateAction<boolean>>
+	// --- CUSTOM END ---
+
 	// Scroll-related state (will be moved to scroll hook)
 	showScrollToBottom?: boolean
 	isAtBottom?: boolean

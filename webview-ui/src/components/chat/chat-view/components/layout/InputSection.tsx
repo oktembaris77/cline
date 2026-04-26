@@ -1,7 +1,12 @@
 import React from "react"
 import ChatTextArea from "@/components/chat/ChatTextArea"
 import QuotedMessagePreview from "@/components/chat/QuotedMessagePreview"
+import TaskChangeSummary from "@/components/chat/TaskChangeSummary"
+// --- CUSTOM START: Change Summary ---
+import { useExtensionState } from "@/context/ExtensionStateContext"
 import { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
+
+// --- CUSTOM END ---
 
 interface InputSectionProps {
 	chatState: ChatState
@@ -39,6 +44,12 @@ export const InputSection: React.FC<InputSectionProps> = ({
 	} = chatState
 
 	const { isAtBottom, scrollToBottomAuto } = scrollBehavior
+	// --- CUSTOM START: Change Summary ---
+	const { fileChanges } = useExtensionState()
+	const { showChangeSummary, setShowChangeSummary } = chatState
+
+	const isTaskCompleted = chatState.clineAsk === "completion_result" || chatState.lastMessage?.say === "completion_result"
+	// --- CUSTOM END ---
 
 	return (
 		<>
@@ -51,6 +62,12 @@ export const InputSection: React.FC<InputSectionProps> = ({
 					/>
 				</div>
 			)}
+
+			{/* --- CUSTOM START: Change Summary --- */}
+			{fileChanges && showChangeSummary && isTaskCompleted && (
+				<TaskChangeSummary changes={fileChanges} onClose={() => setShowChangeSummary(false)} />
+			)}
+			{/* --- CUSTOM END --- */}
 
 			<ChatTextArea
 				activeQuote={activeQuote}

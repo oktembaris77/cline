@@ -20,6 +20,9 @@ export function useChatState(messages: ClineMessage[]): ChatState {
 	const [primaryButtonText, setPrimaryButtonText] = useState<string | undefined>("Approve")
 	const [secondaryButtonText, setSecondaryButtonText] = useState<string | undefined>("Reject")
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
+	// --- CUSTOM START: Change Summary ---
+	const [showChangeSummary, setShowChangeSummary] = useState(true)
+	// --- CUSTOM END ---
 
 	// Refs
 	const textAreaRef = useRef<HTMLTextAreaElement>(null)
@@ -51,6 +54,9 @@ export function useChatState(messages: ClineMessage[]): ChatState {
 	// Auto-expand last message row when task or messages first changed.
 	useEffect(() => {
 		clearExpandedRows()
+		// --- CUSTOM START: Change Summary ---
+		setShowChangeSummary(true)
+		// --- CUSTOM END ---
 	}, [task?.ts, clearExpandedRows])
 
 	return {
@@ -75,6 +81,10 @@ export function useChatState(messages: ClineMessage[]): ChatState {
 		setSecondaryButtonText,
 		expandedRows,
 		setExpandedRows,
+		// --- CUSTOM START: Change Summary ---
+		showChangeSummary,
+		setShowChangeSummary,
+		// --- CUSTOM END ---
 
 		// Refs
 		textAreaRef,

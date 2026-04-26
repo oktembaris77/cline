@@ -14,6 +14,8 @@ import { telemetryService } from "@/services/telemetry"
 import { ClineDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
+// --- CUSTOM START: Change Summary ---
+import { recordFileChange } from "../../utils/changeTracking"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -21,6 +23,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { captureAccepted, captureRejected, getModelInfo } from "../utils/AiOutputTelemetry"
 import { applyModelContentFixes } from "../utils/ModelContentProcessor"
 import { ToolDisplayUtils } from "../utils/ToolDisplayUtils"
+// --- CUSTOM END ---
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class WriteToFileToolHandler implements IFullyManagedTool {
@@ -230,6 +233,10 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 					filesCreated: fileExists ? 0 : 1,
 				})
 
+				// --- CUSTOM START: Change Summary ---
+				recordFileChange(config.taskState, relPath, config.services.diffViewProvider.originalContent || "", newContent)
+				// --- CUSTOM END ---
+
 				// we need an artificial delay to let the diagnostics catch up to the changes
 				await setTimeoutPromise(3_500)
 			} else {
@@ -338,6 +345,10 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 					modelId,
 					filesCreated: fileExists ? 0 : 1,
 				})
+
+				// --- CUSTOM START: Change Summary ---
+				recordFileChange(config.taskState, relPath, config.services.diffViewProvider.originalContent || "", newContent)
+				// --- CUSTOM END ---
 			}
 
 			// Run PreToolUse hook after approval but before execution

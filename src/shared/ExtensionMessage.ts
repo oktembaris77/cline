@@ -108,6 +108,9 @@ export interface ExtensionState {
 	banners?: BannerCardData[]
 	welcomeBanners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean
+	// --- CUSTOM START: Change Summary ---
+	fileChanges?: Record<string, { added: number; changed: number; deleted: number }>
+	// --- CUSTOM END ---
 }
 
 export interface ClineMessage {
