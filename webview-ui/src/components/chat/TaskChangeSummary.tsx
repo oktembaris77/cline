@@ -1,6 +1,8 @@
+import { StringRequest } from "@shared/proto/cline/common"
 import { VSCodeButton, VSCodeDivider } from "@vscode/webview-ui-toolkit/react"
 import React from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
+import { FileServiceClient } from "../../services/grpc-client"
 
 interface TaskChangeSummaryProps {
 	changes: Record<string, { added: number; changed: number; deleted: number }>
@@ -19,6 +21,12 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 	const handleReject = () => {
 		PLATFORM_CONFIG.postMessage({ type: "reject_all_changes" })
 		onClose()
+	}
+
+	const handleOpenFile = (path: string) => {
+		FileServiceClient.openFileRelativePath(StringRequest.create({ value: path })).catch((err) => {
+			console.error("Failed to open file:", err)
+		})
 	}
 
 	return (
@@ -54,6 +62,13 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 					white-space: nowrap;
 					font-family: var(--vscode-editor-font-family, monospace);
 					opacity: 0.9;
+					cursor: pointer;
+					transition: opacity 0.2s;
+				}
+				.file-path:hover {
+					opacity: 1;
+					text-decoration: underline;
+					color: var(--vscode-textLink-foreground);
 				}
 				.stats {
 					display: flex;
@@ -86,7 +101,7 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 				{fileEntries.map(([path, stats]) => (
 					<div className="change-item" key={path}>
 						<span className="codicon codicon-file" style={{ fontSize: "14px", opacity: 0.7 }} />
-						<span className="file-path" title={path}>
+						<span className="file-path" onClick={() => handleOpenFile(path)} title={path}>
 							{path}
 						</span>
 						<div className="stats">

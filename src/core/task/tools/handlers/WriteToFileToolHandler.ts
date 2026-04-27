@@ -234,7 +234,12 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				})
 
 				// --- CUSTOM START: Change Summary ---
-				recordFileChange(config.taskState, relPath, config.services.diffViewProvider.originalContent || "", newContent)
+				await recordFileChange(
+					config.taskState,
+					relPath,
+					config.services.diffViewProvider.originalContent || "",
+					newContent,
+				)
 				// --- CUSTOM END ---
 
 				// we need an artificial delay to let the diagnostics catch up to the changes
@@ -347,7 +352,12 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				})
 
 				// --- CUSTOM START: Change Summary ---
-				recordFileChange(config.taskState, relPath, config.services.diffViewProvider.originalContent || "", newContent)
+				await recordFileChange(
+					config.taskState,
+					relPath,
+					config.services.diffViewProvider.originalContent || "",
+					newContent,
+				)
 				// --- CUSTOM END ---
 			}
 

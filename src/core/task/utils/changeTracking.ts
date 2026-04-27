@@ -1,3 +1,4 @@
+import { asRelativePath } from "../../../utils/path"
 import type { TaskState } from "../TaskState"
 import { computeLineDiffStats } from "../tools/utils/lineDiffStats"
 
@@ -7,12 +8,13 @@ import { computeLineDiffStats } from "../tools/utils/lineDiffStats"
  *
  * --- CUSTOM FEATURE: Change Summary ---
  */
-export function recordFileChange(
+export async function recordFileChange(
 	taskState: TaskState,
-	relPath: string,
+	filePath: string,
 	oldContent: string | undefined | null,
 	newContent: string,
-): void {
+): Promise<void> {
+	const relPath = (await asRelativePath(filePath)).toPosix()
 	const safeOldContent = oldContent || ""
 
 	// --- BACKUP START ---

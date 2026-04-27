@@ -327,7 +327,7 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 					}
 
 					// --- CUSTOM START: Change Summary ---
-					recordFileChange(config.taskState, operationPath, change.oldContent || "", change.newContent || "")
+					await recordFileChange(config.taskState, operationPath, change.oldContent || "", change.newContent || "")
 					// --- CUSTOM END ---
 				}
 
