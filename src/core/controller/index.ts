@@ -1071,11 +1071,6 @@ export class Controller {
 		}
 
 		try {
-			HostProvider.window.showMessage({
-				type: ShowMessageType.INFORMATION,
-				message: "Applying selected hunk changes...",
-			})
-
 			// Capture data before cancelling task
 			const capturedBackups = new Map(this.task.taskState.originalContents)
 			const capturedChanges = new Map(this.task.taskState.fileChanges)
@@ -1182,11 +1177,6 @@ export class Controller {
 			}
 
 			await this.postStateToWebview()
-
-			HostProvider.window.showMessage({
-				type: ShowMessageType.INFORMATION,
-				message: "SUCCESS: Selected changes have been applied.",
-			})
 		} catch (error) {
 			const msg = error instanceof Error ? error.message : String(error)
 			HostProvider.window.showMessage({
@@ -1203,11 +1193,6 @@ export class Controller {
 		}
 
 		try {
-			HostProvider.window.showMessage({
-				type: ShowMessageType.INFORMATION,
-				message: "Rejecting all remaining changes...",
-			})
-
 			// Set all pending hunks to rejected
 			let hasPending = false
 			for (const change of this.task.taskState.fileChanges.values()) {
