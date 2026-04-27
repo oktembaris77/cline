@@ -1,5 +1,11 @@
 export interface WebviewMessage {
-	type: "grpc_request" | "grpc_request_cancel" | "approve_all_changes" | "reject_all_changes" | "update_hunk_status"
+	type:
+		| "grpc_request"
+		| "grpc_request_cancel"
+		| "approve_all_changes"
+		| "reject_all_changes"
+		| "apply_hunk_changes"
+		| "update_hunk_status"
 	grpc_request?: GrpcRequest
 	grpc_request_cancel?: GrpcCancel
 	payload?: any

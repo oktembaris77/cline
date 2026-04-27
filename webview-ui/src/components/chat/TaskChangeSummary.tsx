@@ -122,6 +122,11 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes: initialC
 		})
 	}
 
+	const handleDone = () => {
+		PLATFORM_CONFIG.postMessage({ type: "apply_hunk_changes" })
+		onClose()
+	}
+
 	return (
 		<div
 			style={{
@@ -395,11 +400,20 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes: initialC
 
 					<VSCodeDivider style={{ marginBottom: "12px", opacity: 0.5 }} />
 
-					<div style={{ display: "flex", gap: "8px" }}>
-						<VSCodeButton appearance="primary" onClick={handleApprove} style={{ flex: 1, height: "28px" }}>
+					<div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+						<VSCodeButton appearance="primary" onClick={handleDone} style={{ flex: "1 1 100%", height: "28px" }}>
+							Done (Apply Selected)
+						</VSCodeButton>
+						<VSCodeButton
+							appearance="secondary"
+							onClick={handleApprove}
+							style={{ flex: "1 1 calc(50% - 4px)", height: "28px" }}>
 							Approve All
 						</VSCodeButton>
-						<VSCodeButton appearance="secondary" onClick={handleReject} style={{ flex: 1, height: "28px" }}>
+						<VSCodeButton
+							appearance="secondary"
+							onClick={handleReject}
+							style={{ flex: "1 1 calc(50% - 4px)", height: "28px" }}>
 							Reject All
 						</VSCodeButton>
 					</div>

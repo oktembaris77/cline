@@ -1063,6 +1063,105 @@ export class Controller {
 		}
 	}
 
+	async applyHunkChanges() {
+		if (!this.task) {
+			HostProvider.window.showMessage({ type: ShowMessageType.WARNING, message: "Apply failed: No active task." })
+			return
+		}
+
+		try {
+			HostProvider.window.showMessage({
+				type: ShowMessageType.INFORMATION,
+				message: "Applying selected hunk changes...",
+			})
+
+			// Capture data before cancelling task
+			const capturedBackups = new Map(this.task.taskState.originalContents)
+			const capturedChanges = new Map(this.task.taskState.fileChanges)
+
+			await this.cancelTask()
+
+			for (const [fullPath, originalContent] of capturedBackups.entries()) {
+				// Find corresponding changes map entry
+				let fileChange = null
+				for (const change of capturedChanges.values()) {
+					if (change.fullPath === fullPath) {
+						fileChange = change
+						break
+					}
+				}
+
+				if (!fileChange || !fileChange.hunks || !fileChange.fullDiff) {
+					// If no hunks data, keep it as is (the model's applied version)
+					continue
+				}
+
+				// Reconstruct content based on hunk statuses
+				let result = ""
+				let hunkIndex = 0
+				let insideHunk = false
+				let currentHunk: any = null
+				let hunkHasBeenApplied = false
+
+				for (const change of fileChange.fullDiff) {
+					if (change.added || change.removed) {
+						if (!insideHunk) {
+							insideHunk = true
+							currentHunk = fileChange.hunks[hunkIndex]
+							hunkHasBeenApplied = false
+							hunkIndex++
+						}
+
+						if (!hunkHasBeenApplied && currentHunk) {
+							if (currentHunk.status === "rejected") {
+								result += currentHunk.oldValue
+							} else {
+								// "approved" or "pending" -> keep the new changes
+								result += currentHunk.newValue
+							}
+							hunkHasBeenApplied = true
+						}
+					} else {
+						insideHunk = false
+						currentHunk = null
+						result += change.value
+					}
+				}
+
+				try {
+					if (result === "" && !fullPath.includes("package.json")) {
+						if (await fileExistsAtPath(fullPath)) {
+							await fs.unlink(fullPath)
+							Logger.info(`[Controller] Deleted file because all changes rejected: ${fullPath}`)
+						}
+					} else {
+						await fs.writeFile(fullPath, result, "utf8")
+						Logger.info(`[Controller] Applied selected hunks for: ${fullPath}`)
+					}
+				} catch (err) {
+					Logger.error(`[Controller] Failed to apply hunks to ${fullPath}:`, err)
+				}
+			}
+
+			if (this.task) {
+				this.task.taskState.fileChanges.clear()
+				this.task.taskState.originalContents.clear()
+			}
+			await this.postStateToWebview()
+
+			HostProvider.window.showMessage({
+				type: ShowMessageType.INFORMATION,
+				message: "SUCCESS: Selected changes have been applied.",
+			})
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : String(error)
+			HostProvider.window.showMessage({
+				type: ShowMessageType.ERROR,
+				message: `Apply Changes Failed: ${msg}`,
+			})
+		}
+	}
+
 	async rejectAllChanges() {
 		if (!this.task) {
 			HostProvider.window.showMessage({ type: ShowMessageType.WARNING, message: "Reject All failed: No active task." })
