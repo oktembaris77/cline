@@ -63,10 +63,8 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 					min-width: fit-content;
 				}
 				.stat-add { color: #4ec9b0; } /* Fallback green */
-				.stat-mod { color: #ce9178; } /* Fallback orange */
 				.stat-del { color: #f48771; } /* Fallback red */
 				.stat-add-vsc { color: var(--vscode-gitDecoration-addedResourceForeground); }
-				.stat-mod-vsc { color: var(--vscode-gitDecoration-modifiedResourceForeground); }
 				.stat-del-vsc { color: var(--vscode-gitDecoration-deletedResourceForeground); }
 				`}
 			</style>
@@ -93,7 +91,6 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 						</span>
 						<div className="stats">
 							{stats.added > 0 && <span className="stat-add stat-add-vsc">+{stats.added}</span>}
-							{stats.changed > 0 && <span className="stat-mod stat-mod-vsc">~{stats.changed}</span>}
 							{stats.deleted > 0 && <span className="stat-del stat-del-vsc">-{stats.deleted}</span>}
 						</div>
 					</div>

@@ -1037,9 +1037,13 @@ export class Controller {
 			this.task.taskState.fileChanges.clear()
 			await this.postStateToWebview()
 
-			// 2. Only trigger approval if there's an active ask.
-			// This prevents duplicate "Task Completed" messages if one is already shown.
-			if (this.task.taskState.askResponse === undefined) {
+			// 2. Only trigger approval if there's an active ask and it's NOT a completion result already.
+			// If it's a completion result, the user just needs to click the built-in button or we just clear the UI.
+			const messages = this.task.messageStateHandler.getClineMessages()
+			const lastMessage = messages[messages.length - 1]
+			const isAwaitingCompletion = lastMessage?.ask === "completion_result"
+
+			if (this.task.taskState.askResponse === undefined && !isAwaitingCompletion) {
 				await this.task.handleWebviewAskResponse("yesButtonClicked")
 			}
 		}

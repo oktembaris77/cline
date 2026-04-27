@@ -32,8 +32,8 @@ export function recordFileChange(
 	}
 
 	taskState.fileChanges.set(relPath, {
-		added: currentChanges.added + linesAdded,
-		changed: currentChanges.changed + diffStats.linesChanged,
-		deleted: currentChanges.deleted + diffStats.linesDeleted,
+		added: currentChanges.added + linesAdded + diffStats.linesChanged,
+		changed: 0, // No more yellow "~" stats
+		deleted: currentChanges.deleted + diffStats.linesDeleted + diffStats.linesChanged,
 	})
 }

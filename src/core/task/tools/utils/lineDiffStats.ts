@@ -35,10 +35,15 @@ function countLines(value: string): number {
  * @returns LineDiffStats with counts of added, deleted, and changed lines
  */
 export function computeLineDiffStats(before: string, after: string): LineDiffStats {
-	// Normalize trailing newlines so diffLines doesn't treat last-line boundary shifts as changes
-	const normBefore = before ? (before.endsWith("\n") ? before : before + "\n") : ""
-	const normAfter = after ? (after.endsWith("\n") ? after : after + "\n") : ""
-	const changes = diff.diffLines(normBefore, normAfter)
+	// Normalize line endings to LF to prevent CRLF vs LF mismatches from bloating diffs
+	const normBefore = before ? before.replace(/\r\n/g, "\n") : ""
+	const normAfter = after ? after.replace(/\r\n/g, "\n") : ""
+
+	// Add trailing newline if missing to ensure proper line-by-line diffing
+	const finalBefore = normBefore && !normBefore.endsWith("\n") ? normBefore + "\n" : normBefore
+	const finalAfter = normAfter && !normAfter.endsWith("\n") ? normAfter + "\n" : normAfter
+
+	const changes = diff.diffLines(finalBefore, finalAfter)
 
 	let linesAdded = 0
 	let linesDeleted = 0
