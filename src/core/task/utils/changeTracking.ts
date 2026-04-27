@@ -14,7 +14,6 @@ export function recordFileChange(
 	newContent: string,
 ): void {
 	const safeOldContent = oldContent || ""
-	const diffStats = computeLineDiffStats(safeOldContent, newContent)
 
 	// --- BACKUP START ---
 	// If this is the first time we see this file, backup the original content
@@ -23,17 +22,19 @@ export function recordFileChange(
 	}
 	// --- BACKUP END ---
 
-	const currentChanges = taskState.fileChanges.get(relPath) || { added: 0, changed: 0, deleted: 0 }
+	// Always compare against the original content to get a cumulative task diff
+	const originalContent = taskState.originalContents.get(relPath) || ""
+	const diffStats = computeLineDiffStats(originalContent, newContent)
 
 	let linesAdded = diffStats.linesAdded
 	// Handle new files where diff might return 0 but content exists
-	if (safeOldContent === "" && linesAdded === 0 && newContent.length > 0) {
+	if (originalContent === "" && linesAdded === 0 && newContent.length > 0) {
 		linesAdded = newContent.split(/\r?\n/).length
 	}
 
 	taskState.fileChanges.set(relPath, {
-		added: currentChanges.added + linesAdded + diffStats.linesChanged,
+		added: linesAdded + diffStats.linesChanged,
 		changed: 0, // No more yellow "~" stats
-		deleted: currentChanges.deleted + diffStats.linesDeleted + diffStats.linesChanged,
+		deleted: diffStats.linesDeleted + diffStats.linesChanged,
 	})
 }
