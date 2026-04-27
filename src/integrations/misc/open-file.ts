@@ -29,10 +29,14 @@ export async function openImage(dataUri: string) {
 	}
 }
 
-export async function openFile(absolutePath: string, preserveFocus: boolean = false, preview: boolean = false) {
+export async function openFile(absolutePath: string, preserveFocus = false, preview = false, lineNumber?: number) {
 	try {
+		// --- CUSTOM START: Line navigation ---
+		// Encode line number in path as "path\0lineNumber" convention parsed by showTextDocument
+		const pathWithLine = lineNumber !== undefined && lineNumber > 0 ? `${absolutePath}\0${lineNumber}` : absolutePath
+		// --- CUSTOM END ---
 		await HostProvider.window.showTextDocument({
-			path: absolutePath,
+			path: pathWithLine,
 			options: { preserveFocus, preview },
 		})
 	} catch (_error) {

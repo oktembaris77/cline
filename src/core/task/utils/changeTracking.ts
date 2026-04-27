@@ -1,3 +1,4 @@
+import * as diff from "diff"
 import { asRelativePath } from "../../../utils/path"
 import type { TaskState } from "../TaskState"
 import { computeLineDiffStats } from "../tools/utils/lineDiffStats"
@@ -34,9 +35,44 @@ export async function recordFileChange(
 		linesAdded = newContent.split(/\r?\n/).length
 	}
 
+	// --- CUSTOM START: firstChangedLine ---
+	// Find the first line that changed (1-based line number)
+	const firstChangedLine = computeFirstChangedLine(originalContent, newContent)
+	// --- CUSTOM END ---
+
 	taskState.fileChanges.set(relPath, {
 		added: linesAdded + diffStats.linesChanged,
 		changed: 0, // No more yellow "~" stats
 		deleted: diffStats.linesDeleted + diffStats.linesChanged,
+		firstChangedLine,
 	})
+}
+
+/**
+ * Compute the 1-based line number of the first changed line.
+ * Returns 1 as fallback for new files.
+ */
+function computeFirstChangedLine(before: string, after: string): number {
+	if (!before) return 1
+
+	const normBefore = before.replace(/\r\n/g, "\n")
+	const normAfter = after.replace(/\r\n/g, "\n")
+
+	const changes = diff.diffLines(normBefore, normAfter)
+
+	let lineNumber = 1
+	for (const change of changes) {
+		if (change.removed || change.added) {
+			return lineNumber
+		}
+		// Count unchanged lines to track position
+		if (!change.added) {
+			const lineCount = change.value.split("\n").length
+			// diffLines includes a trailing empty string from split if value ends with \n
+			const actualLines = change.value.endsWith("\n") ? lineCount - 1 : lineCount
+			lineNumber += actualLines
+		}
+	}
+
+	return 1
 }

@@ -78,7 +78,7 @@ export class TaskState {
 	activeHookExecution?: HookExecution
 
 	// Change tracking
-	fileChanges: Map<string, { added: number; changed: number; deleted: number }> = new Map()
+	fileChanges: Map<string, { added: number; changed: number; deleted: number; firstChangedLine?: number }> = new Map()
 	originalContents: Map<string, string> = new Map()
 	// --- CUSTOM END ---
 

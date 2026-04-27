@@ -99,7 +99,11 @@ const FileBlock = memo<{ file: Patch; isStreaming: boolean; startLineNumber?: nu
 			event.stopPropagation()
 
 			if (file.path) {
-				FileServiceClient.openFileRelativePath(StringRequest.create({ value: file.path })).catch((err) =>
+				// --- CUSTOM START: Line navigation ---
+				// Navigate to the first changed line if startLineNumber is available
+				const value = startLineNumber !== undefined && startLineNumber > 0 ? `${file.path}|${startLineNumber}` : file.path
+				// --- CUSTOM END ---
+				FileServiceClient.openFileRelativePath(StringRequest.create({ value })).catch((err) =>
 					console.error("Failed to open file:", err),
 				)
 			}

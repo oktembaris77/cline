@@ -5,7 +5,7 @@ import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { FileServiceClient } from "../../services/grpc-client"
 
 interface TaskChangeSummaryProps {
-	changes: Record<string, { added: number; changed: number; deleted: number }>
+	changes: Record<string, { added: number; changed: number; deleted: number; firstChangedLine?: number }>
 	onClose: () => void
 }
 
@@ -23,8 +23,12 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 		onClose()
 	}
 
-	const handleOpenFile = (path: string) => {
-		FileServiceClient.openFileRelativePath(StringRequest.create({ value: path })).catch((err) => {
+	const handleOpenFile = (path: string, firstChangedLine?: number) => {
+		// --- CUSTOM START: Line navigation ---
+		// Encode line number as "path|lineNumber" - parsed by openFileRelativePath backend
+		const value = firstChangedLine && firstChangedLine > 0 ? `${path}|${firstChangedLine}` : path
+		// --- CUSTOM END ---
+		FileServiceClient.openFileRelativePath(StringRequest.create({ value })).catch((err) => {
 			console.error("Failed to open file:", err)
 		})
 	}
@@ -81,6 +85,32 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 				.stat-del { color: #f48771; } /* Fallback red */
 				.stat-add-vsc { color: var(--vscode-gitDecoration-addedResourceForeground); }
 				.stat-del-vsc { color: var(--vscode-gitDecoration-deletedResourceForeground); }
+				.diff-bar {
+					display: flex;
+					gap: 1px;
+					align-items: center;
+					min-width: 60px;
+					height: 8px;
+				}
+				.diff-bar-added {
+					background: var(--vscode-gitDecoration-addedResourceForeground, #4ec9b0);
+					height: 100%;
+					border-radius: 2px 0 0 2px;
+					min-width: 2px;
+				}
+				.diff-bar-deleted {
+					background: var(--vscode-gitDecoration-deletedResourceForeground, #f48771);
+					height: 100%;
+					border-radius: 0 2px 2px 0;
+					min-width: 2px;
+				}
+				.line-hint {
+					font-size: 10px;
+					opacity: 0.5;
+					font-family: var(--vscode-editor-font-family, monospace);
+					margin-left: 2px;
+					white-space: nowrap;
+				}
 				`}
 			</style>
 
@@ -98,18 +128,46 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 			</div>
 
 			<div style={{ maxHeight: "180px", overflowY: "auto", marginBottom: "12px", paddingRight: "4px" }}>
-				{fileEntries.map(([path, stats]) => (
-					<div className="change-item" key={path}>
-						<span className="codicon codicon-file" style={{ fontSize: "14px", opacity: 0.7 }} />
-						<span className="file-path" onClick={() => handleOpenFile(path)} title={path}>
-							{path}
-						</span>
-						<div className="stats">
-							{stats.added > 0 && <span className="stat-add stat-add-vsc">+{stats.added}</span>}
-							{stats.deleted > 0 && <span className="stat-del stat-del-vsc">-{stats.deleted}</span>}
+				{fileEntries.map(([path, stats]) => {
+					const total = stats.added + stats.deleted
+					const addedWidth = total > 0 ? Math.max(2, Math.round((stats.added / total) * 50)) : 0
+					const deletedWidth = total > 0 ? Math.max(2, Math.round((stats.deleted / total) * 50)) : 0
+
+					return (
+						<div className="change-item" key={path}>
+							<span className="codicon codicon-file" style={{ fontSize: "14px", opacity: 0.7 }} />
+							<span
+								className="file-path"
+								onClick={() => handleOpenFile(path, stats.firstChangedLine)}
+								title={
+									stats.firstChangedLine ? `Open file at line ${stats.firstChangedLine} (first change)` : path
+								}>
+								{path}
+							</span>
+							{/* --- CUSTOM START: Mini diff bar visual --- */}
+							{total > 0 && (
+								<div className="diff-bar" title={`+${stats.added} -${stats.deleted}`}>
+									{stats.added > 0 && <div className="diff-bar-added" style={{ width: `${addedWidth}px` }} />}
+									{stats.deleted > 0 && (
+										<div className="diff-bar-deleted" style={{ width: `${deletedWidth}px` }} />
+									)}
+								</div>
+							)}
+							{/* --- CUSTOM END --- */}
+							<div className="stats">
+								{stats.added > 0 && <span className="stat-add stat-add-vsc">+{stats.added}</span>}
+								{stats.deleted > 0 && <span className="stat-del stat-del-vsc">-{stats.deleted}</span>}
+							</div>
+							{/* --- CUSTOM START: Line number hint --- */}
+							{stats.firstChangedLine && (
+								<span className="line-hint" title="First changed line">
+									:{stats.firstChangedLine}
+								</span>
+							)}
+							{/* --- CUSTOM END --- */}
 						</div>
-					</div>
-				))}
+					)
+				})}
 			</div>
 
 			<VSCodeDivider style={{ marginBottom: "12px", opacity: 0.5 }} />
