@@ -1049,6 +1049,20 @@ export class Controller {
 		}
 	}
 
+	async updateHunkStatus(filePath: string, hunkId: string, status: "pending" | "approved" | "rejected") {
+		if (!this.task) {
+			return
+		}
+		const fileChange = this.task.taskState.fileChanges.get(filePath)
+		if (fileChange && fileChange.hunks) {
+			const hunk = fileChange.hunks.find((h) => h.id === hunkId)
+			if (hunk) {
+				hunk.status = status
+				await this.postStateToWebview()
+			}
+		}
+	}
+
 	async rejectAllChanges() {
 		if (!this.task) {
 			HostProvider.window.showMessage({ type: ShowMessageType.WARNING, message: "Reject All failed: No active task." })
@@ -1068,27 +1082,23 @@ export class Controller {
 			// 2. Stop active work
 			await this.cancelTask()
 
-			const cwd = await getCwd()
-
 			// 3. Iterate through captured backups and restore them
-			for (const [relPath, originalContent] of capturedBackups.entries()) {
-				const fullPath = path.resolve(cwd, relPath)
-
+			for (const [fullPath, originalContent] of capturedBackups.entries()) {
+				const relPath = path.relative(process.cwd(), fullPath) // For logging
 				try {
-					if (originalContent === "" && !relPath.includes("package.json")) {
+					if (originalContent === "" && !fullPath.includes("package.json")) {
 						// This was likely a brand new file, delete it
-						// We check for package.json as a safety measure (should never be empty anyway)
 						if (await fileExistsAtPath(fullPath)) {
 							await fs.unlink(fullPath)
-							Logger.info(`[Controller] Deleted new file: ${relPath}`)
+							Logger.info(`[Controller] Deleted new file: ${fullPath}`)
 						}
 					} else {
 						// Restore original content
 						await fs.writeFile(fullPath, originalContent, "utf8")
-						Logger.info(`[Controller] Restored original content: ${relPath}`)
+						Logger.info(`[Controller] Restored original content: ${fullPath}`)
 					}
 				} catch (err) {
-					Logger.error(`[Controller] Failed to restore ${relPath}:`, err)
+					Logger.error(`[Controller] Failed to restore ${fullPath}:`, err)
 				}
 			}
 

@@ -81,6 +81,7 @@ export class TaskState {
 	fileChanges: Map<
 		string,
 		{
+			fullPath: string
 			added: number
 			changed: number
 			deleted: number
@@ -90,7 +91,10 @@ export class TaskState {
 				added: number
 				deleted: number
 				status: "pending" | "approved" | "rejected"
+				oldValue: string
+				newValue: string
 			}>
+			fullDiff?: any[] // diff.Change[]
 		}
 	> = new Map()
 	originalContents: Map<string, string> = new Map()

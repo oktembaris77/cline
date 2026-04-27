@@ -20,13 +20,13 @@ export async function recordFileChange(
 
 	// --- BACKUP START ---
 	// If this is the first time we see this file, backup the original content
-	if (!taskState.originalContents.has(relPath)) {
-		taskState.originalContents.set(relPath, safeOldContent)
+	if (!taskState.originalContents.has(filePath)) {
+		taskState.originalContents.set(filePath, safeOldContent)
 	}
 	// --- BACKUP END ---
 
 	// Always compare against the original content to get a cumulative task diff
-	const originalContent = taskState.originalContents.get(relPath) || ""
+	const originalContent = taskState.originalContents.get(filePath) || ""
 	const diffStats = computeLineDiffStats(originalContent, newContent)
 
 	let linesAdded = diffStats.linesAdded
@@ -37,14 +37,16 @@ export async function recordFileChange(
 
 	// --- CUSTOM START: hunks ---
 	// Find all hunks and their stats
-	const hunks = computeHunks(originalContent, newContent)
+	const { hunks, fullDiff } = computeHunks(originalContent, newContent)
 	// --- CUSTOM END ---
 
 	taskState.fileChanges.set(relPath, {
+		fullPath: filePath,
 		added: linesAdded + diffStats.linesChanged,
 		changed: 0,
 		deleted: diffStats.linesDeleted + diffStats.linesChanged,
 		hunks,
+		fullDiff,
 	})
 }
 
@@ -54,12 +56,14 @@ interface HunkInfo {
 	added: number
 	deleted: number
 	status: "pending" | "approved" | "rejected"
+	oldValue: string
+	newValue: string
 }
 
 /**
  * Compute hunks with their stats.
  */
-function computeHunks(before: string, after: string): HunkInfo[] {
+function computeHunks(before: string, after: string): { hunks: HunkInfo[]; fullDiff: diff.Change[] } {
 	const normBefore = before ? before.replace(/\r\n/g, "\n") : ""
 	const normAfter = after ? after.replace(/\r\n/g, "\n") : ""
 
@@ -67,12 +71,12 @@ function computeHunks(before: string, after: string): HunkInfo[] {
 	const hunks: HunkInfo[] = []
 
 	let currentLineAfter = 1
-	let currentHunk: { startLine: number; added: number; deleted: number } | null = null
+	let currentHunk: { startLine: number; added: number; deleted: number; oldValue: string; newValue: string } | null = null
 
 	for (const change of changes) {
 		if (change.added || change.removed) {
 			if (!currentHunk) {
-				currentHunk = { startLine: currentLineAfter, added: 0, deleted: 0 }
+				currentHunk = { startLine: currentLineAfter, added: 0, deleted: 0, oldValue: "", newValue: "" }
 			}
 
 			const lines = change.value.split("\n")
@@ -80,10 +84,11 @@ function computeHunks(before: string, after: string): HunkInfo[] {
 
 			if (change.added) {
 				currentHunk.added += count
+				currentHunk.newValue += change.value
 				currentLineAfter += count
 			} else {
 				currentHunk.deleted += count
-				// Removed lines don't exist in 'after' content, so currentLineAfter doesn't move
+				currentHunk.oldValue += change.value
 			}
 		} else {
 			// Unchanged block
@@ -94,6 +99,8 @@ function computeHunks(before: string, after: string): HunkInfo[] {
 					added: currentHunk.added,
 					deleted: currentHunk.deleted,
 					status: "pending",
+					oldValue: currentHunk.oldValue,
+					newValue: currentHunk.newValue,
 				})
 				currentHunk = null
 			}
@@ -112,8 +119,10 @@ function computeHunks(before: string, after: string): HunkInfo[] {
 			added: currentHunk.added,
 			deleted: currentHunk.deleted,
 			status: "pending",
+			oldValue: currentHunk.oldValue,
+			newValue: currentHunk.newValue,
 		})
 	}
 
-	return hunks
+	return { hunks, fullDiff: changes }
 }

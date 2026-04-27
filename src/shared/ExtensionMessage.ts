@@ -121,6 +121,8 @@ export interface ExtensionState {
 				added: number
 				deleted: number
 				status: "pending" | "approved" | "rejected"
+				oldValue: string
+				newValue: string
 			}>
 		}
 	>

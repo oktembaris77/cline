@@ -10,6 +10,8 @@ interface HunkInfo {
 	added: number
 	deleted: number
 	status: "pending" | "approved" | "rejected"
+	oldValue: string
+	newValue: string
 }
 
 interface TaskChangeSummaryProps {
@@ -113,6 +115,11 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes: initialC
 				[path]: { ...file, hunks: newHunks },
 			}
 		})
+
+		PLATFORM_CONFIG.postMessage({
+			type: "update_hunk_status",
+			payload: { path, hunkId, status },
+		})
 	}
 
 	return (
@@ -200,7 +207,7 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes: initialC
 					align-items: center;
 					justify-content: space-between;
 					gap: 8px;
-					padding: 4px 6px;
+					padding: 4px 8px;
 					border-radius: 4px;
 					background: var(--vscode-editor-background);
 					border: 1px solid transparent;
@@ -211,36 +218,63 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes: initialC
 				}
 				.sub-line.rejected {
 					opacity: 0.5;
+				}
+				.sub-line.rejected .sub-line-info {
 					text-decoration: line-through;
+				}
+				.sub-line.approved {
+					background: rgba(78, 201, 176, 0.05);
+					border-color: rgba(78, 201, 176, 0.2);
 				}
 				.sub-line-info {
 					font-size: 11px;
 					font-family: var(--vscode-editor-font-family, monospace);
 					cursor: pointer;
 					flex: 1;
+					display: flex;
+					align-items: center;
+					gap: 6px;
 				}
+				.status-dot {
+					width: 6px;
+					height: 6px;
+					border-radius: 50%;
+					background: var(--vscode-descriptionForeground);
+					opacity: 0.3;
+				}
+				.approved .status-dot { background: #4ec9b0; opacity: 1; }
+				.rejected .status-dot { background: #f48771; opacity: 1; }
+
 				.hunk-actions {
 					display: flex;
 					gap: 4px;
 				}
 				.hunk-btn {
-					width: 20px;
-					height: 20px;
+					width: 24px;
+					height: 24px;
 					display: flex;
 					align-items: center;
 					justify-content: center;
-					border-radius: 3px;
+					border-radius: 4px;
 					cursor: pointer;
-					font-size: 12px;
-					opacity: 0.6;
-					transition: opacity 0.2s, background 0.2s;
+					font-size: 14px;
+					opacity: 0.5;
+					transition: all 0.2s;
 				}
 				.hunk-btn:hover {
 					opacity: 1;
 					background: var(--vscode-list-hoverBackground);
 				}
-				.hunk-btn.active-app { color: #4ec9b0; opacity: 1; }
-				.hunk-btn.active-rej { color: #f48771; opacity: 1; }
+				.hunk-btn.active-app { 
+					color: #4ec9b0; 
+					opacity: 1;
+					background: rgba(78, 201, 176, 0.1);
+				}
+				.hunk-btn.active-rej { 
+					color: #f48771; 
+					opacity: 1;
+					background: rgba(244, 135, 113, 0.1);
+				}
 
 				.expand-icon {
 					font-size: 12px;
@@ -320,13 +354,18 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes: initialC
 										<div className="sub-lines">
 											{hunks.length > 0 ? (
 												hunks.map((h) => (
-													<div
-														className={`sub-line ${h.status === "rejected" ? "rejected" : ""}`}
-														key={h.id}>
+													<div className={`sub-line ${h.status}`} key={h.id}>
 														<div
 															className="sub-line-info"
 															onClick={() => handleOpenFile(path, h.startLine)}>
-															:{h.startLine} (+{h.added} -{h.deleted})
+															<div className="status-dot" />
+															<span>:{h.startLine}</span>
+															<div className="stats" style={{ fontWeight: 400, opacity: 0.6 }}>
+																{h.added > 0 && <span className="stat-add-vsc">+{h.added}</span>}
+																{h.deleted > 0 && (
+																	<span className="stat-del-vsc">-{h.deleted}</span>
+																)}
+															</div>
 														</div>
 														<div className="hunk-actions">
 															<div

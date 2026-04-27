@@ -182,6 +182,12 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				await this.controller.rejectAllChanges()
 				break
 			}
+			case "update_hunk_status": {
+				if (message.payload) {
+					await this.controller.updateHunkStatus(message.payload.path, message.payload.hunkId, message.payload.status)
+				}
+				break
+			}
 			default: {
 				Logger.error("Received unhandled WebviewMessage type:", JSON.stringify(message))
 			}
