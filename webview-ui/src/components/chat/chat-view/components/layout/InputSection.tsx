@@ -48,7 +48,15 @@ export const InputSection: React.FC<InputSectionProps> = ({
 	const { fileChanges } = useExtensionState()
 	const { showChangeSummary, setShowChangeSummary } = chatState
 
-	const isTaskCompleted = chatState.clineAsk === "completion_result" || chatState.lastMessage?.say === "completion_result"
+	// Auto-reset showChangeSummary when new changes start coming in
+	React.useEffect(() => {
+		if (fileChanges && Object.keys(fileChanges).length > 0 && !showChangeSummary) {
+			const hasSignificantChanges = Object.values(fileChanges).some((s) => s.added > 0 || s.changed > 0 || s.deleted > 0)
+			if (hasSignificantChanges) {
+				setShowChangeSummary(true)
+			}
+		}
+	}, [fileChanges, showChangeSummary, setShowChangeSummary])
 	// --- CUSTOM END ---
 
 	return (
@@ -79,7 +87,12 @@ export const InputSection: React.FC<InputSectionProps> = ({
 					}
 				}}
 				onSelectFilesAndImages={selectFilesAndImages}
-				onSend={() => messageHandlers.handleSendMessage(inputValue, selectedImages, selectedFiles)}
+				onSend={() => {
+					// --- CUSTOM START: Change Summary ---
+					setShowChangeSummary(true)
+					// --- CUSTOM END ---
+					messageHandlers.handleSendMessage(inputValue, selectedImages, selectedFiles)
+				}}
 				placeholderText={placeholderText}
 				ref={textAreaRef}
 				selectedFiles={selectedFiles}
