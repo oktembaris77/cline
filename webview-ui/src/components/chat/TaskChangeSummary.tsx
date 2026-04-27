@@ -10,6 +10,7 @@ interface TaskChangeSummaryProps {
 }
 
 const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose }) => {
+	const [isMainExpanded, setIsMainExpanded] = useState(true)
 	const [expandedFiles, setExpandedFiles] = useState<Record<string, boolean>>({})
 
 	const fileEntries = Object.entries(changes)
@@ -26,10 +27,7 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 	}
 
 	const handleOpenFile = (path: string, lineNumber?: number) => {
-		// --- CUSTOM START: Line navigation ---
-		// Encode line number as "path|lineNumber" - parsed by openFileRelativePath backend
 		const value = lineNumber && lineNumber > 0 ? `${path}|${lineNumber}` : path
-		// --- CUSTOM END ---
 		FileServiceClient.openFileRelativePath(StringRequest.create({ value })).catch((err) => {
 			console.error("Failed to open file:", err)
 		})
@@ -60,6 +58,28 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 				@keyframes slideIn {
 					from { transform: translateY(10px); opacity: 0; }
 					to { transform: translateY(0); opacity: 1; }
+				}
+				.header-container {
+					display: flex;
+					justify-content: space-between;
+					align-items: center;
+					margin-bottom: ${isMainExpanded ? "10px" : "0"};
+					cursor: pointer;
+					user-select: none;
+				}
+				.header-container:hover .header-text {
+					color: var(--vscode-foreground);
+				}
+				.header-text {
+					font-weight: bold;
+					font-size: 11px;
+					color: var(--vscode-descriptionForeground);
+					text-transform: uppercase;
+					letter-spacing: 1px;
+					display: flex;
+					align-items: center;
+					gap: 6px;
+					transition: color 0.2s;
 				}
 				.change-item-container {
 					margin-bottom: 8px;
@@ -94,8 +114,6 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 					min-width: fit-content;
 					font-size: 11px;
 				}
-				.stat-add { color: #4ec9b0; }
-				.stat-del { color: #f48771; }
 				.stat-add-vsc { color: var(--vscode-gitDecoration-addedResourceForeground); }
 				.stat-del-vsc { color: var(--vscode-gitDecoration-deletedResourceForeground); }
 				
@@ -156,82 +174,82 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 				`}
 			</style>
 
-			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-				<span
-					style={{
-						fontWeight: "bold",
-						fontSize: "11px",
-						color: "var(--vscode-descriptionForeground)",
-						textTransform: "uppercase",
-						letterSpacing: "1px",
-					}}>
-					Task Changes
+			<div className="header-container" onClick={() => setIsMainExpanded(!isMainExpanded)}>
+				<span className="header-text">
+					<div className={`expand-icon codicon codicon-chevron-right ${isMainExpanded ? "expanded" : ""}`} />
+					Task Changes ({fileEntries.length})
 				</span>
 			</div>
 
-			<div style={{ maxHeight: "250px", overflowY: "auto", marginBottom: "12px", paddingRight: "4px" }}>
-				{fileEntries.map(([path, stats]) => {
-					const isExpanded = expandedFiles[path]
-					const lineNumbers = stats.changedLineNumbers || []
-					const total = stats.added + stats.deleted
-					const addedWidth = total > 0 ? Math.max(1, Math.round((stats.added / total) * 40)) : 0
-					const deletedWidth = total > 0 ? Math.max(1, Math.round((stats.deleted / total) * 40)) : 0
+			{isMainExpanded && (
+				<>
+					<div style={{ maxHeight: "250px", overflowY: "auto", marginBottom: "12px", paddingRight: "4px" }}>
+						{fileEntries.map(([path, stats]) => {
+							const isExpanded = expandedFiles[path]
+							const lineNumbers = stats.changedLineNumbers || []
+							const total = stats.added + stats.deleted
+							const addedWidth = total > 0 ? Math.max(1, Math.round((stats.added / total) * 40)) : 0
+							const deletedWidth = total > 0 ? Math.max(1, Math.round((stats.deleted / total) * 40)) : 0
 
-					return (
-						<div className="change-item-container" key={path}>
-							<div className="change-item">
-								<div
-									className={`expand-icon codicon codicon-chevron-right ${isExpanded ? "expanded" : ""}`}
-									onClick={(e) => toggleExpand(path, e)}
-								/>
-								<span className="codicon codicon-file" style={{ fontSize: "14px", opacity: 0.7 }} />
-								<span
-									className="file-path"
-									onClick={() => handleOpenFile(path, lineNumbers[0])}
-									title={`Open ${path}${lineNumbers[0] ? ` at line ${lineNumbers[0]}` : ""}`}>
-									{path}
-								</span>
+							return (
+								<div className="change-item-container" key={path}>
+									<div className="change-item">
+										<div
+											className={`expand-icon codicon codicon-chevron-right ${isExpanded ? "expanded" : ""}`}
+											onClick={(e) => toggleExpand(path, e)}
+										/>
+										<span className="codicon codicon-file" style={{ fontSize: "14px", opacity: 0.7 }} />
+										<span
+											className="file-path"
+											onClick={() => handleOpenFile(path, lineNumbers[0])}
+											title={`Open ${path}${lineNumbers[0] ? ` at line ${lineNumbers[0]}` : ""}`}>
+											{path}
+										</span>
 
-								<div className="diff-bar">
-									{stats.added > 0 && <div className="diff-bar-added" style={{ width: `${addedWidth}px` }} />}
-									{stats.deleted > 0 && (
-										<div className="diff-bar-deleted" style={{ width: `${deletedWidth}px` }} />
+										<div className="diff-bar">
+											{stats.added > 0 && (
+												<div className="diff-bar-added" style={{ width: `${addedWidth}px` }} />
+											)}
+											{stats.deleted > 0 && (
+												<div className="diff-bar-deleted" style={{ width: `${deletedWidth}px` }} />
+											)}
+										</div>
+
+										<div className="stats">
+											{stats.added > 0 && <span className="stat-add-vsc">+{stats.added}</span>}
+											{stats.deleted > 0 && <span className="stat-del-vsc">-{stats.deleted}</span>}
+										</div>
+									</div>
+
+									{isExpanded && lineNumbers.length > 0 && (
+										<div className="sub-lines">
+											{lineNumbers.map((ln, idx) => (
+												<div
+													className="sub-line"
+													key={`${path}-${ln}-${idx}`}
+													onClick={() => handleOpenFile(path, ln)}>
+													{path} :{ln}
+												</div>
+											))}
+										</div>
 									)}
 								</div>
+							)
+						})}
+					</div>
 
-								<div className="stats">
-									{stats.added > 0 && <span className="stat-add stat-add-vsc">+{stats.added}</span>}
-									{stats.deleted > 0 && <span className="stat-del stat-del-vsc">-{stats.deleted}</span>}
-								</div>
-							</div>
+					<VSCodeDivider style={{ marginBottom: "12px", opacity: 0.5 }} />
 
-							{isExpanded && lineNumbers.length > 0 && (
-								<div className="sub-lines">
-									{lineNumbers.map((ln, idx) => (
-										<div
-											className="sub-line"
-											key={`${path}-${ln}-${idx}`}
-											onClick={() => handleOpenFile(path, ln)}>
-											{path} :{ln}
-										</div>
-									))}
-								</div>
-							)}
-						</div>
-					)
-				})}
-			</div>
-
-			<VSCodeDivider style={{ marginBottom: "12px", opacity: 0.5 }} />
-
-			<div style={{ display: "flex", gap: "8px" }}>
-				<VSCodeButton appearance="primary" onClick={handleApprove} style={{ flex: 1, height: "28px" }}>
-					Approve All
-				</VSCodeButton>
-				<VSCodeButton appearance="secondary" onClick={handleReject} style={{ flex: 1, height: "28px" }}>
-					Reject All
-				</VSCodeButton>
-			</div>
+					<div style={{ display: "flex", gap: "8px" }}>
+						<VSCodeButton appearance="primary" onClick={handleApprove} style={{ flex: 1, height: "28px" }}>
+							Approve All
+						</VSCodeButton>
+						<VSCodeButton appearance="secondary" onClick={handleReject} style={{ flex: 1, height: "28px" }}>
+							Reject All
+						</VSCodeButton>
+					</div>
+				</>
+			)}
 		</div>
 	)
 }
