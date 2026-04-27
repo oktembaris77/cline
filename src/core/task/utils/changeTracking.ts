@@ -35,56 +35,85 @@ export async function recordFileChange(
 		linesAdded = newContent.split(/\r?\n/).length
 	}
 
-	// --- CUSTOM START: changedLineNumbers ---
-	// Find all line numbers where changes occur (1-based)
-	const changedLineNumbers = computeChangedLineNumbers(originalContent, newContent)
+	// --- CUSTOM START: hunks ---
+	// Find all hunks and their stats
+	const hunks = computeHunks(originalContent, newContent)
 	// --- CUSTOM END ---
 
 	taskState.fileChanges.set(relPath, {
 		added: linesAdded + diffStats.linesChanged,
-		changed: 0, // No more yellow "~" stats
+		changed: 0,
 		deleted: diffStats.linesDeleted + diffStats.linesChanged,
-		changedLineNumbers,
+		hunks,
 	})
 }
 
-/**
- * Compute the 1-based line numbers where changes begin.
- * For new files, returns [1].
- */
-function computeChangedLineNumbers(before: string, after: string): number[] {
-	if (!before) return [1]
+interface HunkInfo {
+	id: string
+	startLine: number
+	added: number
+	deleted: number
+	status: "pending" | "approved" | "rejected"
+}
 
-	const normBefore = before.replace(/\r\n/g, "\n")
-	const normAfter = after.replace(/\r\n/g, "\n")
+/**
+ * Compute hunks with their stats.
+ */
+function computeHunks(before: string, after: string): HunkInfo[] {
+	const normBefore = before ? before.replace(/\r\n/g, "\n") : ""
+	const normAfter = after ? after.replace(/\r\n/g, "\n") : ""
 
 	const changes = diff.diffLines(normBefore, normAfter)
+	const hunks: HunkInfo[] = []
 
-	const lineNumbers: number[] = []
-	let lineNumber = 1
-	let inHunk = false
+	let currentLineAfter = 1
+	let currentHunk: { startLine: number; added: number; deleted: number } | null = null
 
 	for (const change of changes) {
-		if (change.removed || change.added) {
-			if (!inHunk) {
-				lineNumbers.push(lineNumber)
-				inHunk = true
+		if (change.added || change.removed) {
+			if (!currentHunk) {
+				currentHunk = { startLine: currentLineAfter, added: 0, deleted: 0 }
+			}
+
+			const lines = change.value.split("\n")
+			const count = change.value.endsWith("\n") ? lines.length - 1 : lines.length
+
+			if (change.added) {
+				currentHunk.added += count
+				currentLineAfter += count
+			} else {
+				currentHunk.deleted += count
+				// Removed lines don't exist in 'after' content, so currentLineAfter doesn't move
 			}
 		} else {
-			inHunk = false
-		}
+			// Unchanged block
+			if (currentHunk) {
+				hunks.push({
+					id: `hunk-${currentHunk.startLine}-${hunks.length}`,
+					startLine: currentHunk.startLine,
+					added: currentHunk.added,
+					deleted: currentHunk.deleted,
+					status: "pending",
+				})
+				currentHunk = null
+			}
 
-		// Count unchanged lines to track position
-		// Also count removed lines because we want the position in the "before" state
-		// for deletions, but "after" state for additions?
-		// Actually, VSCode selection usually refers to the CURRENT state of the file.
-		// So we should track line numbers in the AFTER state.
-		if (!change.removed) {
-			const lineCount = change.value.split("\n").length
-			const actualLines = change.value.endsWith("\n") ? lineCount - 1 : lineCount
-			lineNumber += actualLines
+			const lines = change.value.split("\n")
+			const count = change.value.endsWith("\n") ? lines.length - 1 : lines.length
+			currentLineAfter += count
 		}
 	}
 
-	return lineNumbers.length > 0 ? lineNumbers : [1]
+	// Final hunk if file ends with changes
+	if (currentHunk) {
+		hunks.push({
+			id: `hunk-${currentHunk.startLine}-${hunks.length}`,
+			startLine: currentHunk.startLine,
+			added: currentHunk.added,
+			deleted: currentHunk.deleted,
+			status: "pending",
+		})
+	}
+
+	return hunks
 }

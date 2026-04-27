@@ -1,20 +1,79 @@
 import { StringRequest } from "@shared/proto/cline/common"
 import { VSCodeButton, VSCodeDivider } from "@vscode/webview-ui-toolkit/react"
-import React, { useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { FileServiceClient } from "../../services/grpc-client"
 
+interface HunkInfo {
+	id: string
+	startLine: number
+	added: number
+	deleted: number
+	status: "pending" | "approved" | "rejected"
+}
+
 interface TaskChangeSummaryProps {
-	changes: Record<string, { added: number; changed: number; deleted: number; changedLineNumbers?: number[] }>
+	changes: Record<
+		string,
+		{
+			added: number
+			changed: number
+			deleted: number
+			hunks?: HunkInfo[]
+		}
+	>
 	onClose: () => void
 }
 
-const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose }) => {
+const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes: initialChanges, onClose }) => {
 	const [isMainExpanded, setIsMainExpanded] = useState(true)
 	const [expandedFiles, setExpandedFiles] = useState<Record<string, boolean>>({})
 
-	const fileEntries = Object.entries(changes)
-	if (fileEntries.length === 0) return null
+	// Local state to track interactive changes
+	const [localChanges, setLocalChanges] = useState(initialChanges)
+
+	// Sync local changes if initialChanges changes (e.g. new files added by AI)
+	useEffect(() => {
+		setLocalChanges((prev) => {
+			const next = { ...initialChanges }
+			// Preserve local status if file already exists
+			Object.keys(prev).forEach((path) => {
+				if (next[path] && prev[path].hunks && next[path].hunks) {
+					const prevHunks = prev[path].hunks!
+					next[path].hunks = next[path].hunks!.map((h) => {
+						const existing = prevHunks.find((ph) => ph.id === h.id)
+						return existing ? { ...h, status: existing.status } : h
+					})
+				}
+			})
+			return next
+		})
+	}, [initialChanges])
+
+	const fileEntries = Object.entries(localChanges)
+
+	const statsPerFile = useMemo(() => {
+		const result: Record<string, { added: number; deleted: number }> = {}
+		fileEntries.forEach(([path, file]) => {
+			if (!file.hunks || file.hunks.length === 0) {
+				result[path] = { added: file.added, deleted: file.deleted }
+			} else {
+				let added = 0
+				let deleted = 0
+				file.hunks.forEach((h) => {
+					if (h.status !== "rejected") {
+						added += h.added
+						deleted += h.deleted
+					}
+				})
+				result[path] = { added, deleted }
+			}
+		})
+		return result
+	}, [localChanges, fileEntries])
+
+	const totalFiles = fileEntries.length
+	if (totalFiles === 0) return null
 
 	const handleApprove = () => {
 		PLATFORM_CONFIG.postMessage({ type: "approve_all_changes" })
@@ -39,6 +98,21 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 			...prev,
 			[path]: !prev[path],
 		}))
+	}
+
+	const updateHunkStatus = (path: string, hunkId: string, status: "approved" | "rejected" | "pending", e: React.MouseEvent) => {
+		e.stopPropagation()
+		setLocalChanges((prev) => {
+			const file = prev[path]
+			if (!file || !file.hunks) return prev
+
+			const newHunks = file.hunks.map((h) => (h.id === hunkId ? { ...h, status } : h))
+
+			return {
+				...prev,
+				[path]: { ...file, hunks: newHunks },
+			}
+		})
 	}
 
 	return (
@@ -67,9 +141,6 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 					cursor: pointer;
 					user-select: none;
 				}
-				.header-container:hover .header-text {
-					color: var(--vscode-foreground);
-				}
 				.header-text {
 					font-weight: bold;
 					font-size: 11px;
@@ -79,7 +150,6 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 					display: flex;
 					align-items: center;
 					gap: 6px;
-					transition: color 0.2s;
 				}
 				.change-item-container {
 					margin-bottom: 8px;
@@ -99,7 +169,6 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 					white-space: nowrap;
 					font-family: var(--vscode-editor-font-family, monospace);
 					opacity: 0.9;
-					transition: opacity 0.2s;
 				}
 				.file-path:hover {
 					opacity: 1;
@@ -122,27 +191,60 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 					margin-top: 4px;
 					display: flex;
 					flex-direction: column;
-					gap: 2px;
+					gap: 4px;
 					border-left: 1px solid var(--vscode-panel-border);
 					padding-left: 8px;
 				}
 				.sub-line {
-					font-size: 11px;
-					opacity: 0.7;
-					font-family: var(--vscode-editor-font-family, monospace);
-					cursor: pointer;
-					padding: 2px 4px;
-					border-radius: 3px;
+					display: flex;
+					align-items: center;
+					justify-content: space-between;
+					gap: 8px;
+					padding: 4px 6px;
+					border-radius: 4px;
+					background: var(--vscode-editor-background);
+					border: 1px solid transparent;
+					transition: all 0.2s;
 				}
 				.sub-line:hover {
+					border-color: var(--vscode-panel-border);
+				}
+				.sub-line.rejected {
+					opacity: 0.5;
+					text-decoration: line-through;
+				}
+				.sub-line-info {
+					font-size: 11px;
+					font-family: var(--vscode-editor-font-family, monospace);
+					cursor: pointer;
+					flex: 1;
+				}
+				.hunk-actions {
+					display: flex;
+					gap: 4px;
+				}
+				.hunk-btn {
+					width: 20px;
+					height: 20px;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					border-radius: 3px;
+					cursor: pointer;
+					font-size: 12px;
+					opacity: 0.6;
+					transition: opacity 0.2s, background 0.2s;
+				}
+				.hunk-btn:hover {
 					opacity: 1;
 					background: var(--vscode-list-hoverBackground);
-					color: var(--vscode-textLink-foreground);
 				}
+				.hunk-btn.active-app { color: #4ec9b0; opacity: 1; }
+				.hunk-btn.active-rej { color: #f48771; opacity: 1; }
+
 				.expand-icon {
 					font-size: 12px;
 					opacity: 0.5;
-					cursor: pointer;
 					width: 16px;
 					height: 16px;
 					display: flex;
@@ -150,9 +252,7 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 					justify-content: center;
 					transition: transform 0.2s;
 				}
-				.expand-icon.expanded {
-					transform: rotate(90deg);
-				}
+				.expand-icon.expanded { transform: rotate(90deg); }
 				.diff-bar {
 					display: flex;
 					gap: 1px;
@@ -161,48 +261,43 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 					height: 4px;
 					opacity: 0.6;
 				}
-				.diff-bar-added {
-					background: var(--vscode-gitDecoration-addedResourceForeground, #4ec9b0);
-					height: 100%;
-					border-radius: 1px 0 0 1px;
-				}
-				.diff-bar-deleted {
-					background: var(--vscode-gitDecoration-deletedResourceForeground, #f48771);
-					height: 100%;
-					border-radius: 0 1px 1px 0;
-				}
+				.diff-bar-added { background: var(--vscode-gitDecoration-addedResourceForeground, #4ec9b0); height: 100%; }
+				.diff-bar-deleted { background: var(--vscode-gitDecoration-deletedResourceForeground, #f48771); height: 100%; }
 				`}
 			</style>
 
 			<div className="header-container" onClick={() => setIsMainExpanded(!isMainExpanded)}>
 				<span className="header-text">
 					<div className={`expand-icon codicon codicon-chevron-right ${isMainExpanded ? "expanded" : ""}`} />
-					Task Changes ({fileEntries.length})
+					Task Changes ({totalFiles})
 				</span>
 			</div>
 
 			{isMainExpanded && (
 				<>
-					<div style={{ maxHeight: "250px", overflowY: "auto", marginBottom: "12px", paddingRight: "4px" }}>
-						{fileEntries.map(([path, stats]) => {
+					<div style={{ maxHeight: "300px", overflowY: "auto", marginBottom: "12px", paddingRight: "4px" }}>
+						{fileEntries.map(([path, file]) => {
 							const isExpanded = expandedFiles[path]
-							const lineNumbers = stats.changedLineNumbers || []
+							const stats = statsPerFile[path]
+							const hunks = file.hunks || []
 							const total = stats.added + stats.deleted
 							const addedWidth = total > 0 ? Math.max(1, Math.round((stats.added / total) * 40)) : 0
 							const deletedWidth = total > 0 ? Math.max(1, Math.round((stats.deleted / total) * 40)) : 0
 
 							return (
 								<div className="change-item-container" key={path}>
-									<div className="change-item">
+									<div className="change-item" onClick={(e) => toggleExpand(path, e)}>
 										<div
 											className={`expand-icon codicon codicon-chevron-right ${isExpanded ? "expanded" : ""}`}
-											onClick={(e) => toggleExpand(path, e)}
 										/>
 										<span className="codicon codicon-file" style={{ fontSize: "14px", opacity: 0.7 }} />
 										<span
 											className="file-path"
-											onClick={() => handleOpenFile(path, lineNumbers[0])}
-											title={`Open ${path}${lineNumbers[0] ? ` at line ${lineNumbers[0]}` : ""}`}>
+											onClick={(e) => {
+												e.stopPropagation()
+												handleOpenFile(path, hunks[0]?.startLine)
+											}}
+											title={`Open ${path}`}>
 											{path}
 										</span>
 
@@ -221,16 +316,37 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 										</div>
 									</div>
 
-									{isExpanded && lineNumbers.length > 0 && (
+									{isExpanded && (
 										<div className="sub-lines">
-											{lineNumbers.map((ln, idx) => (
-												<div
-													className="sub-line"
-													key={`${path}-${ln}-${idx}`}
-													onClick={() => handleOpenFile(path, ln)}>
-													{path} :{ln}
+											{hunks.length > 0 ? (
+												hunks.map((h) => (
+													<div
+														className={`sub-line ${h.status === "rejected" ? "rejected" : ""}`}
+														key={h.id}>
+														<div
+															className="sub-line-info"
+															onClick={() => handleOpenFile(path, h.startLine)}>
+															:{h.startLine} (+{h.added} -{h.deleted})
+														</div>
+														<div className="hunk-actions">
+															<div
+																className={`hunk-btn codicon codicon-check ${h.status === "approved" ? "active-app" : ""}`}
+																onClick={(e) => updateHunkStatus(path, h.id, "approved", e)}
+																title="Approve hunk"
+															/>
+															<div
+																className={`hunk-btn codicon codicon-close ${h.status === "rejected" ? "active-rej" : ""}`}
+																onClick={(e) => updateHunkStatus(path, h.id, "rejected", e)}
+																title="Reject hunk"
+															/>
+														</div>
+													</div>
+												))
+											) : (
+												<div className="sub-line" style={{ fontStyle: "italic", opacity: 0.5 }}>
+													Hunk details not available.
 												</div>
-											))}
+											)}
 										</div>
 									)}
 								</div>
