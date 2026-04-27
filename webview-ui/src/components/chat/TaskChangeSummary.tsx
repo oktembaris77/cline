@@ -10,6 +10,7 @@ interface HunkInfo {
 	added: number
 	deleted: number
 	status: "pending" | "approved" | "rejected"
+	isApplied?: boolean
 	oldValue: string
 	newValue: string
 }
@@ -44,7 +45,7 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes: initialC
 					const prevHunks = prev[path].hunks!
 					next[path].hunks = next[path].hunks!.map((h) => {
 						const existing = prevHunks.find((ph) => ph.id === h.id)
-						return existing ? { ...h, status: existing.status } : h
+						return existing ? { ...h, status: existing.status, isApplied: existing.isApplied } : h
 					})
 				}
 			})
@@ -52,18 +53,24 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes: initialC
 		})
 	}, [initialChanges])
 
-	const fileEntries = Object.entries(localChanges)
+	// Filter out files that have no unapplied hunks (or keep them if they have no hunks at all but have overall stats)
+	const activeFileEntries = useMemo(() => {
+		return Object.entries(localChanges).filter(([path, file]) => {
+			if (!file.hunks) return true // keep files without hunk details
+			return file.hunks.some((h) => !h.isApplied) // keep if at least one unapplied hunk
+		})
+	}, [localChanges])
 
 	const statsPerFile = useMemo(() => {
 		const result: Record<string, { added: number; deleted: number }> = {}
-		fileEntries.forEach(([path, file]) => {
+		activeFileEntries.forEach(([path, file]) => {
 			if (!file.hunks || file.hunks.length === 0) {
 				result[path] = { added: file.added, deleted: file.deleted }
 			} else {
 				let added = 0
 				let deleted = 0
 				file.hunks.forEach((h) => {
-					if (h.status !== "rejected") {
+					if (!h.isApplied && h.status !== "rejected") {
 						added += h.added
 						deleted += h.deleted
 					}
@@ -72,9 +79,9 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes: initialC
 			}
 		})
 		return result
-	}, [localChanges, fileEntries])
+	}, [activeFileEntries])
 
-	const totalFiles = fileEntries.length
+	const totalFiles = activeFileEntries.length
 	if (totalFiles === 0) return null
 
 	const handleApprove = () => {
@@ -124,7 +131,7 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes: initialC
 
 	const handleDone = () => {
 		PLATFORM_CONFIG.postMessage({ type: "apply_hunk_changes" })
-		onClose()
+		// Do not call onClose() here. The extension will clear the state and close it if everything is done.
 	}
 
 	return (
@@ -315,10 +322,10 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes: initialC
 			{isMainExpanded && (
 				<>
 					<div style={{ maxHeight: "300px", overflowY: "auto", marginBottom: "12px", paddingRight: "4px" }}>
-						{fileEntries.map(([path, file]) => {
+						{activeFileEntries.map(([path, file]) => {
 							const isExpanded = expandedFiles[path]
 							const stats = statsPerFile[path]
-							const hunks = file.hunks || []
+							const hunks = (file.hunks || []).filter((h) => !h.isApplied)
 							const total = stats.added + stats.deleted
 							const addedWidth = total > 0 ? Math.max(1, Math.round((stats.added / total) * 40)) : 0
 							const deletedWidth = total > 0 ? Math.max(1, Math.round((stats.deleted / total) * 40)) : 0

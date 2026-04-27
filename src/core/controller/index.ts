@@ -1035,6 +1035,7 @@ export class Controller {
 		if (this.task) {
 			// 1. Clear the summary map immediately to close the panel in UI
 			this.task.taskState.fileChanges.clear()
+			this.task.taskState.originalContents.clear()
 			await this.postStateToWebview()
 
 			// 2. Only trigger approval if there's an active ask and it's NOT a completion result already.
@@ -1079,7 +1080,8 @@ export class Controller {
 			const capturedBackups = new Map(this.task.taskState.originalContents)
 			const capturedChanges = new Map(this.task.taskState.fileChanges)
 
-			await this.cancelTask()
+			// Do NOT cancel the task here so we can keep the review panel open
+			// await this.cancelTask()
 
 			for (const [fullPath, originalContent] of capturedBackups.entries()) {
 				// Find corresponding changes map entry
@@ -1094,6 +1096,12 @@ export class Controller {
 				if (!fileChange || !fileChange.hunks || !fileChange.fullDiff) {
 					// If no hunks data, keep it as is (the model's applied version)
 					continue
+				}
+
+				// Check if any hunks are newly processed (approved or rejected)
+				const hasNewStatus = fileChange.hunks.some((h) => !h.isApplied && h.status !== "pending")
+				if (!hasNewStatus) {
+					continue // Nothing new to apply for this file
 				}
 
 				// Reconstruct content based on hunk statuses
@@ -1138,15 +1146,41 @@ export class Controller {
 						await fs.writeFile(fullPath, result, "utf8")
 						Logger.info(`[Controller] Applied selected hunks for: ${fullPath}`)
 					}
+
+					// Mark processed hunks as applied
+					fileChange.hunks.forEach((h) => {
+						if (h.status !== "pending") {
+							h.isApplied = true
+						}
+					})
 				} catch (err) {
 					Logger.error(`[Controller] Failed to apply hunks to ${fullPath}:`, err)
 				}
 			}
 
-			if (this.task) {
+			// Check if any pending hunks remain globally
+			let hasPending = false
+			for (const change of this.task.taskState.fileChanges.values()) {
+				if (change.hunks && change.hunks.some((h) => !h.isApplied)) {
+					hasPending = true
+					break
+				}
+			}
+
+			if (!hasPending) {
+				// All changes have been explicitly approved or rejected
 				this.task.taskState.fileChanges.clear()
 				this.task.taskState.originalContents.clear()
+
+				const messages = this.task.messageStateHandler.getClineMessages()
+				const lastMessage = messages[messages.length - 1]
+				const isAwaitingCompletion = lastMessage?.ask === "completion_result"
+
+				if (this.task.taskState.askResponse === undefined && !isAwaitingCompletion) {
+					await this.task.handleWebviewAskResponse("yesButtonClicked")
+				}
 			}
+
 			await this.postStateToWebview()
 
 			HostProvider.window.showMessage({
@@ -1171,47 +1205,31 @@ export class Controller {
 		try {
 			HostProvider.window.showMessage({
 				type: ShowMessageType.INFORMATION,
-				message: "Reverting all changes (Manual Backup Method)...",
+				message: "Rejecting all remaining changes...",
 			})
 
-			// 1. IMPORTANT: Capture backups BEFORE cancelTask re-initializes the task instance
-			const capturedBackups = new Map(this.task.taskState.originalContents)
-			Logger.info(`[Controller] Captured ${capturedBackups.size} files for restoration.`)
-
-			// 2. Stop active work
-			await this.cancelTask()
-
-			// 3. Iterate through captured backups and restore them
-			for (const [fullPath, originalContent] of capturedBackups.entries()) {
-				const relPath = path.relative(process.cwd(), fullPath) // For logging
-				try {
-					if (originalContent === "" && !fullPath.includes("package.json")) {
-						// This was likely a brand new file, delete it
-						if (await fileExistsAtPath(fullPath)) {
-							await fs.unlink(fullPath)
-							Logger.info(`[Controller] Deleted new file: ${fullPath}`)
+			// Set all pending hunks to rejected
+			let hasPending = false
+			for (const change of this.task.taskState.fileChanges.values()) {
+				if (change.hunks) {
+					change.hunks.forEach((h) => {
+						if (!h.isApplied && h.status === "pending") {
+							h.status = "rejected"
+							hasPending = true
 						}
-					} else {
-						// Restore original content
-						await fs.writeFile(fullPath, originalContent, "utf8")
-						Logger.info(`[Controller] Restored original content: ${fullPath}`)
-					}
-				} catch (err) {
-					Logger.error(`[Controller] Failed to restore ${fullPath}:`, err)
+					})
 				}
 			}
 
-			// 4. Clear tracking on the NEW task instance
-			if (this.task) {
+			if (hasPending) {
+				await this.applyHunkChanges()
+			} else {
+				// If no hunks were pending, maybe there were files without hunks?
+				// Just clear to close the UI
 				this.task.taskState.fileChanges.clear()
 				this.task.taskState.originalContents.clear()
+				await this.postStateToWebview()
 			}
-			await this.postStateToWebview()
-
-			HostProvider.window.showMessage({
-				type: ShowMessageType.INFORMATION,
-				message: "SUCCESS: All changes have been manually reverted to their original state.",
-			})
 		} catch (error) {
 			const msg = error instanceof Error ? error.message : String(error)
 			HostProvider.window.showMessage({

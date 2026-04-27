@@ -91,6 +91,7 @@ export class TaskState {
 				added: number
 				deleted: number
 				status: "pending" | "approved" | "rejected"
+				isApplied?: boolean
 				oldValue: string
 				newValue: string
 			}>
