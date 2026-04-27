@@ -45,7 +45,7 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes: initialC
 					const prevHunks = prev[path].hunks!
 					next[path].hunks = next[path].hunks!.map((h) => {
 						const existing = prevHunks.find((ph) => ph.id === h.id)
-						return existing ? { ...h, status: existing.status, isApplied: existing.isApplied } : h
+						return existing ? { ...h, status: existing.status } : h
 					})
 				}
 			})
