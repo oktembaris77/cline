@@ -109,7 +109,7 @@ export interface ExtensionState {
 	welcomeBanners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean
 	// --- CUSTOM START: Change Summary ---
-	fileChanges?: Record<string, { added: number; changed: number; deleted: number; firstChangedLine?: number }>
+	fileChanges?: Record<string, { added: number; changed: number; deleted: number; changedLineNumbers?: number[] }>
 	// --- CUSTOM END ---
 }
 

@@ -35,44 +35,56 @@ export async function recordFileChange(
 		linesAdded = newContent.split(/\r?\n/).length
 	}
 
-	// --- CUSTOM START: firstChangedLine ---
-	// Find the first line that changed (1-based line number)
-	const firstChangedLine = computeFirstChangedLine(originalContent, newContent)
+	// --- CUSTOM START: changedLineNumbers ---
+	// Find all line numbers where changes occur (1-based)
+	const changedLineNumbers = computeChangedLineNumbers(originalContent, newContent)
 	// --- CUSTOM END ---
 
 	taskState.fileChanges.set(relPath, {
 		added: linesAdded + diffStats.linesChanged,
 		changed: 0, // No more yellow "~" stats
 		deleted: diffStats.linesDeleted + diffStats.linesChanged,
-		firstChangedLine,
+		changedLineNumbers,
 	})
 }
 
 /**
- * Compute the 1-based line number of the first changed line.
- * Returns 1 as fallback for new files.
+ * Compute the 1-based line numbers where changes begin.
+ * For new files, returns [1].
  */
-function computeFirstChangedLine(before: string, after: string): number {
-	if (!before) return 1
+function computeChangedLineNumbers(before: string, after: string): number[] {
+	if (!before) return [1]
 
 	const normBefore = before.replace(/\r\n/g, "\n")
 	const normAfter = after.replace(/\r\n/g, "\n")
 
 	const changes = diff.diffLines(normBefore, normAfter)
 
+	const lineNumbers: number[] = []
 	let lineNumber = 1
+	let inHunk = false
+
 	for (const change of changes) {
 		if (change.removed || change.added) {
-			return lineNumber
+			if (!inHunk) {
+				lineNumbers.push(lineNumber)
+				inHunk = true
+			}
+		} else {
+			inHunk = false
 		}
+
 		// Count unchanged lines to track position
-		if (!change.added) {
+		// Also count removed lines because we want the position in the "before" state
+		// for deletions, but "after" state for additions?
+		// Actually, VSCode selection usually refers to the CURRENT state of the file.
+		// So we should track line numbers in the AFTER state.
+		if (!change.removed) {
 			const lineCount = change.value.split("\n").length
-			// diffLines includes a trailing empty string from split if value ends with \n
 			const actualLines = change.value.endsWith("\n") ? lineCount - 1 : lineCount
 			lineNumber += actualLines
 		}
 	}
 
-	return 1
+	return lineNumbers.length > 0 ? lineNumbers : [1]
 }

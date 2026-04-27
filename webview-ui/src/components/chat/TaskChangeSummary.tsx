@@ -1,15 +1,17 @@
 import { StringRequest } from "@shared/proto/cline/common"
 import { VSCodeButton, VSCodeDivider } from "@vscode/webview-ui-toolkit/react"
-import React from "react"
+import React, { useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { FileServiceClient } from "../../services/grpc-client"
 
 interface TaskChangeSummaryProps {
-	changes: Record<string, { added: number; changed: number; deleted: number; firstChangedLine?: number }>
+	changes: Record<string, { added: number; changed: number; deleted: number; changedLineNumbers?: number[] }>
 	onClose: () => void
 }
 
 const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose }) => {
+	const [expandedFiles, setExpandedFiles] = useState<Record<string, boolean>>({})
+
 	const fileEntries = Object.entries(changes)
 	if (fileEntries.length === 0) return null
 
@@ -23,14 +25,22 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 		onClose()
 	}
 
-	const handleOpenFile = (path: string, firstChangedLine?: number) => {
+	const handleOpenFile = (path: string, lineNumber?: number) => {
 		// --- CUSTOM START: Line navigation ---
 		// Encode line number as "path|lineNumber" - parsed by openFileRelativePath backend
-		const value = firstChangedLine && firstChangedLine > 0 ? `${path}|${firstChangedLine}` : path
+		const value = lineNumber && lineNumber > 0 ? `${path}|${lineNumber}` : path
 		// --- CUSTOM END ---
 		FileServiceClient.openFileRelativePath(StringRequest.create({ value })).catch((err) => {
 			console.error("Failed to open file:", err)
 		})
+	}
+
+	const toggleExpand = (path: string, e: React.MouseEvent) => {
+		e.stopPropagation()
+		setExpandedFiles((prev) => ({
+			...prev,
+			[path]: !prev[path],
+		}))
 	}
 
 	return (
@@ -51,13 +61,16 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 					from { transform: translateY(10px); opacity: 0; }
 					to { transform: translateY(0); opacity: 1; }
 				}
+				.change-item-container {
+					margin-bottom: 8px;
+				}
 				.change-item {
 					display: flex;
 					align-items: center;
-					gap: 8px;
-					margin-bottom: 6px;
+					gap: 4px;
 					font-size: 13px;
 					color: var(--vscode-foreground);
+					cursor: pointer;
 				}
 				.file-path {
 					flex: 1;
@@ -66,7 +79,6 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 					white-space: nowrap;
 					font-family: var(--vscode-editor-font-family, monospace);
 					opacity: 0.9;
-					cursor: pointer;
 					transition: opacity 0.2s;
 				}
 				.file-path:hover {
@@ -76,40 +88,70 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 				}
 				.stats {
 					display: flex;
-					gap: 8px;
+					gap: 6px;
 					font-family: var(--vscode-editor-font-family, monospace);
 					font-weight: 600;
 					min-width: fit-content;
+					font-size: 11px;
 				}
-				.stat-add { color: #4ec9b0; } /* Fallback green */
-				.stat-del { color: #f48771; } /* Fallback red */
+				.stat-add { color: #4ec9b0; }
+				.stat-del { color: #f48771; }
 				.stat-add-vsc { color: var(--vscode-gitDecoration-addedResourceForeground); }
 				.stat-del-vsc { color: var(--vscode-gitDecoration-deletedResourceForeground); }
+				
+				.sub-lines {
+					margin-left: 20px;
+					margin-top: 4px;
+					display: flex;
+					flex-direction: column;
+					gap: 2px;
+					border-left: 1px solid var(--vscode-panel-border);
+					padding-left: 8px;
+				}
+				.sub-line {
+					font-size: 11px;
+					opacity: 0.7;
+					font-family: var(--vscode-editor-font-family, monospace);
+					cursor: pointer;
+					padding: 2px 4px;
+					border-radius: 3px;
+				}
+				.sub-line:hover {
+					opacity: 1;
+					background: var(--vscode-list-hoverBackground);
+					color: var(--vscode-textLink-foreground);
+				}
+				.expand-icon {
+					font-size: 12px;
+					opacity: 0.5;
+					cursor: pointer;
+					width: 16px;
+					height: 16px;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					transition: transform 0.2s;
+				}
+				.expand-icon.expanded {
+					transform: rotate(90deg);
+				}
 				.diff-bar {
 					display: flex;
 					gap: 1px;
 					align-items: center;
-					min-width: 60px;
-					height: 8px;
+					min-width: 40px;
+					height: 4px;
+					opacity: 0.6;
 				}
 				.diff-bar-added {
 					background: var(--vscode-gitDecoration-addedResourceForeground, #4ec9b0);
 					height: 100%;
-					border-radius: 2px 0 0 2px;
-					min-width: 2px;
+					border-radius: 1px 0 0 1px;
 				}
 				.diff-bar-deleted {
 					background: var(--vscode-gitDecoration-deletedResourceForeground, #f48771);
 					height: 100%;
-					border-radius: 0 2px 2px 0;
-					min-width: 2px;
-				}
-				.line-hint {
-					font-size: 10px;
-					opacity: 0.5;
-					font-family: var(--vscode-editor-font-family, monospace);
-					margin-left: 2px;
-					white-space: nowrap;
+					border-radius: 0 1px 1px 0;
 				}
 				`}
 			</style>
@@ -127,44 +169,54 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 				</span>
 			</div>
 
-			<div style={{ maxHeight: "180px", overflowY: "auto", marginBottom: "12px", paddingRight: "4px" }}>
+			<div style={{ maxHeight: "250px", overflowY: "auto", marginBottom: "12px", paddingRight: "4px" }}>
 				{fileEntries.map(([path, stats]) => {
+					const isExpanded = expandedFiles[path]
+					const lineNumbers = stats.changedLineNumbers || []
 					const total = stats.added + stats.deleted
-					const addedWidth = total > 0 ? Math.max(2, Math.round((stats.added / total) * 50)) : 0
-					const deletedWidth = total > 0 ? Math.max(2, Math.round((stats.deleted / total) * 50)) : 0
+					const addedWidth = total > 0 ? Math.max(1, Math.round((stats.added / total) * 40)) : 0
+					const deletedWidth = total > 0 ? Math.max(1, Math.round((stats.deleted / total) * 40)) : 0
 
 					return (
-						<div className="change-item" key={path}>
-							<span className="codicon codicon-file" style={{ fontSize: "14px", opacity: 0.7 }} />
-							<span
-								className="file-path"
-								onClick={() => handleOpenFile(path, stats.firstChangedLine)}
-								title={
-									stats.firstChangedLine ? `Open file at line ${stats.firstChangedLine} (first change)` : path
-								}>
-								{path}
-							</span>
-							{/* --- CUSTOM START: Mini diff bar visual --- */}
-							{total > 0 && (
-								<div className="diff-bar" title={`+${stats.added} -${stats.deleted}`}>
+						<div className="change-item-container" key={path}>
+							<div className="change-item">
+								<div
+									className={`expand-icon codicon codicon-chevron-right ${isExpanded ? "expanded" : ""}`}
+									onClick={(e) => toggleExpand(path, e)}
+								/>
+								<span className="codicon codicon-file" style={{ fontSize: "14px", opacity: 0.7 }} />
+								<span
+									className="file-path"
+									onClick={() => handleOpenFile(path, lineNumbers[0])}
+									title={`Open ${path}${lineNumbers[0] ? ` at line ${lineNumbers[0]}` : ""}`}>
+									{path}
+								</span>
+
+								<div className="diff-bar">
 									{stats.added > 0 && <div className="diff-bar-added" style={{ width: `${addedWidth}px` }} />}
 									{stats.deleted > 0 && (
 										<div className="diff-bar-deleted" style={{ width: `${deletedWidth}px` }} />
 									)}
 								</div>
-							)}
-							{/* --- CUSTOM END --- */}
-							<div className="stats">
-								{stats.added > 0 && <span className="stat-add stat-add-vsc">+{stats.added}</span>}
-								{stats.deleted > 0 && <span className="stat-del stat-del-vsc">-{stats.deleted}</span>}
+
+								<div className="stats">
+									{stats.added > 0 && <span className="stat-add stat-add-vsc">+{stats.added}</span>}
+									{stats.deleted > 0 && <span className="stat-del stat-del-vsc">-{stats.deleted}</span>}
+								</div>
 							</div>
-							{/* --- CUSTOM START: Line number hint --- */}
-							{stats.firstChangedLine && (
-								<span className="line-hint" title="First changed line">
-									:{stats.firstChangedLine}
-								</span>
+
+							{isExpanded && lineNumbers.length > 0 && (
+								<div className="sub-lines">
+									{lineNumbers.map((ln, idx) => (
+										<div
+											className="sub-line"
+											key={`${path}-${ln}-${idx}`}
+											onClick={() => handleOpenFile(path, ln)}>
+											{path} :{ln}
+										</div>
+									))}
+								</div>
 							)}
-							{/* --- CUSTOM END --- */}
 						</div>
 					)
 				})}
