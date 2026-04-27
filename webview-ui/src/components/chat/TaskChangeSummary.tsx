@@ -1,5 +1,6 @@
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeButton, VSCodeDivider } from "@vscode/webview-ui-toolkit/react"
 import React from "react"
+import { PLATFORM_CONFIG } from "../../config/platform.config"
 
 interface TaskChangeSummaryProps {
 	changes: Record<string, { added: number; changed: number; deleted: number }>
@@ -9,6 +10,16 @@ interface TaskChangeSummaryProps {
 const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose }) => {
 	const fileEntries = Object.entries(changes)
 	if (fileEntries.length === 0) return null
+
+	const handleApprove = () => {
+		PLATFORM_CONFIG.postMessage({ type: "approve_all_changes" })
+		onClose()
+	}
+
+	const handleReject = () => {
+		PLATFORM_CONFIG.postMessage({ type: "reject_all_changes" })
+		onClose()
+	}
 
 	return (
 		<div
@@ -32,51 +43,72 @@ const TaskChangeSummary: React.FC<TaskChangeSummaryProps> = ({ changes, onClose 
 					display: flex;
 					align-items: center;
 					gap: 8px;
-					margin-bottom: 4px;
-					font-size: 12px;
+					margin-bottom: 6px;
+					font-size: 13px;
+					color: var(--vscode-foreground);
 				}
 				.file-path {
-					color: var(--vscode-foreground);
-					font-weight: 500;
 					flex: 1;
 					overflow: hidden;
 					text-overflow: ellipsis;
 					white-space: nowrap;
+					font-family: var(--vscode-editor-font-family, monospace);
+					opacity: 0.9;
 				}
 				.stats {
 					display: flex;
-					gap: 6px;
-					font-family: var(--vscode-editor-font-family);
+					gap: 8px;
+					font-family: var(--vscode-editor-font-family, monospace);
+					font-weight: 600;
+					min-width: fit-content;
 				}
-				.stat-add { color: var(--vscode-gitDecoration-addedResourceForeground); }
-				.stat-mod { color: var(--vscode-gitDecoration-modifiedResourceForeground); }
-				.stat-del { color: var(--vscode-gitDecoration-deletedResourceForeground); }
+				.stat-add { color: #4ec9b0; } /* Fallback green */
+				.stat-mod { color: #ce9178; } /* Fallback orange */
+				.stat-del { color: #f48771; } /* Fallback red */
+				.stat-add-vsc { color: var(--vscode-gitDecoration-addedResourceForeground); }
+				.stat-mod-vsc { color: var(--vscode-gitDecoration-modifiedResourceForeground); }
+				.stat-del-vsc { color: var(--vscode-gitDecoration-deletedResourceForeground); }
 				`}
 			</style>
 
-			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-				<span style={{ fontWeight: "bold", fontSize: "13px", color: "var(--vscode-descriptionForeground)" }}>
-					Task Summary
+			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+				<span
+					style={{
+						fontWeight: "bold",
+						fontSize: "11px",
+						color: "var(--vscode-descriptionForeground)",
+						textTransform: "uppercase",
+						letterSpacing: "1px",
+					}}>
+					Task Changes
 				</span>
-				<VSCodeButton appearance="icon" onClick={onClose} style={{ height: "20px", width: "20px" }}>
-					<span className="codicon codicon-close" />
-				</VSCodeButton>
 			</div>
 
-			<div style={{ maxHeight: "150px", overflowY: "auto" }}>
+			<div style={{ maxHeight: "180px", overflowY: "auto", marginBottom: "12px", paddingRight: "4px" }}>
 				{fileEntries.map(([path, stats]) => (
 					<div className="change-item" key={path}>
-						<span className="codicon codicon-file" />
+						<span className="codicon codicon-file" style={{ fontSize: "14px", opacity: 0.7 }} />
 						<span className="file-path" title={path}>
 							{path}
 						</span>
 						<div className="stats">
-							{stats.added > 0 && <span className="stat-add">+{stats.added}</span>}
-							{stats.changed > 0 && <span className="stat-mod">~{stats.changed}</span>}
-							{stats.deleted > 0 && <span className="stat-del">-{stats.deleted}</span>}
+							{stats.added > 0 && <span className="stat-add stat-add-vsc">+{stats.added}</span>}
+							{stats.changed > 0 && <span className="stat-mod stat-mod-vsc">~{stats.changed}</span>}
+							{stats.deleted > 0 && <span className="stat-del stat-del-vsc">-{stats.deleted}</span>}
 						</div>
 					</div>
 				))}
+			</div>
+
+			<VSCodeDivider style={{ marginBottom: "12px", opacity: 0.5 }} />
+
+			<div style={{ display: "flex", gap: "8px" }}>
+				<VSCodeButton appearance="primary" onClick={handleApprove} style={{ flex: 1, height: "28px" }}>
+					Approve All
+				</VSCodeButton>
+				<VSCodeButton appearance="secondary" onClick={handleReject} style={{ flex: 1, height: "28px" }}>
+					Reject All
+				</VSCodeButton>
 			</div>
 		</div>
 	)

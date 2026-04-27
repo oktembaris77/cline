@@ -1030,4 +1030,82 @@ export class Controller {
 		this.stateManager.setGlobalState("taskHistory", history)
 		return history
 	}
+	// --- CUSTOM START: Change Summary ---
+	async approveAllChanges() {
+		if (this.task) {
+			// 1. Clear the summary map immediately to close the panel in UI
+			this.task.taskState.fileChanges.clear()
+			await this.postStateToWebview()
+
+			// 2. Only trigger approval if there's an active ask.
+			// This prevents duplicate "Task Completed" messages if one is already shown.
+			if (this.task.taskState.askResponse === undefined) {
+				await this.task.handleWebviewAskResponse("yesButtonClicked")
+			}
+		}
+	}
+
+	async rejectAllChanges() {
+		if (!this.task) {
+			HostProvider.window.showMessage({ type: ShowMessageType.WARNING, message: "Reject All failed: No active task." })
+			return
+		}
+
+		try {
+			HostProvider.window.showMessage({
+				type: ShowMessageType.INFORMATION,
+				message: "Reverting all changes (Manual Backup Method)...",
+			})
+
+			// 1. IMPORTANT: Capture backups BEFORE cancelTask re-initializes the task instance
+			const capturedBackups = new Map(this.task.taskState.originalContents)
+			Logger.info(`[Controller] Captured ${capturedBackups.size} files for restoration.`)
+
+			// 2. Stop active work
+			await this.cancelTask()
+
+			const cwd = await getCwd()
+
+			// 3. Iterate through captured backups and restore them
+			for (const [relPath, originalContent] of capturedBackups.entries()) {
+				const fullPath = path.resolve(cwd, relPath)
+
+				try {
+					if (originalContent === "" && !relPath.includes("package.json")) {
+						// This was likely a brand new file, delete it
+						// We check for package.json as a safety measure (should never be empty anyway)
+						if (await fileExistsAtPath(fullPath)) {
+							await fs.unlink(fullPath)
+							Logger.info(`[Controller] Deleted new file: ${relPath}`)
+						}
+					} else {
+						// Restore original content
+						await fs.writeFile(fullPath, originalContent, "utf8")
+						Logger.info(`[Controller] Restored original content: ${relPath}`)
+					}
+				} catch (err) {
+					Logger.error(`[Controller] Failed to restore ${relPath}:`, err)
+				}
+			}
+
+			// 4. Clear tracking on the NEW task instance
+			if (this.task) {
+				this.task.taskState.fileChanges.clear()
+				this.task.taskState.originalContents.clear()
+			}
+			await this.postStateToWebview()
+
+			HostProvider.window.showMessage({
+				type: ShowMessageType.INFORMATION,
+				message: "SUCCESS: All changes have been manually reverted to their original state.",
+			})
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : String(error)
+			HostProvider.window.showMessage({
+				type: ShowMessageType.ERROR,
+				message: `Reject All Failed: ${msg}`,
+			})
+		}
+	}
+	// --- CUSTOM END ---
 }

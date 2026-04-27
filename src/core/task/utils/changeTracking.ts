@@ -7,12 +7,32 @@ import { computeLineDiffStats } from "../tools/utils/lineDiffStats"
  *
  * --- CUSTOM FEATURE: Change Summary ---
  */
-export function recordFileChange(taskState: TaskState, relPath: string, oldContent: string, newContent: string): void {
-	const diffStats = computeLineDiffStats(oldContent, newContent)
+export function recordFileChange(
+	taskState: TaskState,
+	relPath: string,
+	oldContent: string | undefined | null,
+	newContent: string,
+): void {
+	const safeOldContent = oldContent || ""
+	const diffStats = computeLineDiffStats(safeOldContent, newContent)
+
+	// --- BACKUP START ---
+	// If this is the first time we see this file, backup the original content
+	if (!taskState.originalContents.has(relPath)) {
+		taskState.originalContents.set(relPath, safeOldContent)
+	}
+	// --- BACKUP END ---
+
 	const currentChanges = taskState.fileChanges.get(relPath) || { added: 0, changed: 0, deleted: 0 }
 
+	let linesAdded = diffStats.linesAdded
+	// Handle new files where diff might return 0 but content exists
+	if (safeOldContent === "" && linesAdded === 0 && newContent.length > 0) {
+		linesAdded = newContent.split(/\r?\n/).length
+	}
+
 	taskState.fileChanges.set(relPath, {
-		added: currentChanges.added + diffStats.linesAdded,
+		added: currentChanges.added + linesAdded,
 		changed: currentChanges.changed + diffStats.linesChanged,
 		deleted: currentChanges.deleted + diffStats.linesDeleted,
 	})

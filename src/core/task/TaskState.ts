@@ -77,9 +77,9 @@ export class TaskState {
 	// Hook execution tracking for cancellation
 	activeHookExecution?: HookExecution
 
-	// --- CUSTOM START: Change Summary ---
 	// Change tracking
 	fileChanges: Map<string, { added: number; changed: number; deleted: number }> = new Map()
+	originalContents: Map<string, string> = new Map()
 	// --- CUSTOM END ---
 
 	// Auto-context summarization

@@ -174,6 +174,14 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				}
 				break
 			}
+			case "approve_all_changes": {
+				await this.controller.approveAllChanges()
+				break
+			}
+			case "reject_all_changes": {
+				await this.controller.rejectAllChanges()
+				break
+			}
 			default: {
 				Logger.error("Received unhandled WebviewMessage type:", JSON.stringify(message))
 			}

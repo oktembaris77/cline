@@ -64,7 +64,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 			)}
 
 			{/* --- CUSTOM START: Change Summary --- */}
-			{fileChanges && showChangeSummary && isTaskCompleted && (
+			{fileChanges && showChangeSummary && (
 				<TaskChangeSummary changes={fileChanges} onClose={() => setShowChangeSummary(false)} />
 			)}
 			{/* --- CUSTOM END --- */}

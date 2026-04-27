@@ -1,5 +1,5 @@
 export interface WebviewMessage {
-	type: "grpc_request" | "grpc_request_cancel"
+	type: "grpc_request" | "grpc_request_cancel" | "approve_all_changes" | "reject_all_changes"
 	grpc_request?: GrpcRequest
 	grpc_request_cancel?: GrpcCancel
 }
