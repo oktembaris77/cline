@@ -32,7 +32,7 @@ export class DeepSeekHandler implements ApiHandler {
 			}
 			try {
 				this.client = new OpenAI({
-					baseURL: "https://api.deepseek.com/v1",
+					baseURL: "https://api.deepseek.com",
 					apiKey: this.options.deepSeekApiKey,
 					defaultHeaders: buildExternalBasicHeaders(),
 					fetch, // Use configured fetch with proxy support
@@ -81,7 +81,7 @@ export class DeepSeekHandler implements ApiHandler {
 		const client = this.ensureClient()
 		const model = this.getModel()
 
-		const isDeepseekReasoner = model.id.includes("deepseek-reasoner")
+		const isDeepseekReasoner = !!model.info.supportsReasoning
 
 		const convertedMessages = convertToOpenAiMessages(messages)
 		const openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = isDeepseekReasoner
@@ -95,7 +95,7 @@ export class DeepSeekHandler implements ApiHandler {
 			stream: true,
 			stream_options: { include_usage: true },
 			// Only set temperature for non-reasoner models
-			...(model.id === "deepseek-reasoner" ? {} : { temperature: 0 }),
+			...(isDeepseekReasoner ? {} : { temperature: 0 }),
 			...getOpenAIToolParams(tools),
 		})
 

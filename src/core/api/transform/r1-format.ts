@@ -52,7 +52,7 @@ export function addReasoningContent(
 	return openAiMessages.map((msg, i): DeepSeekReasonerMessage => {
 		if (msg.role === "assistant") {
 			const thinking = thinkingByIndex.get(aiIdx++)
-			if (thinking && i >= lastUserIndex) {
+			if (thinking) {
 				return { ...msg, reasoning_content: thinking }
 			}
 		}

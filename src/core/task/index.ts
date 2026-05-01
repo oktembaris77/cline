@@ -1992,6 +1992,31 @@ export class Task {
 			// saves task history item which we use to keep track of conversation history deleted range
 		}
 
+		// --- API'ye Giden Ham Metni Markdown Olarak Kaydetme ---
+		try {
+			const fs = require("fs/promises")
+			const path = require("path")
+
+			let fullMarkdownText = "# SYSTEM PROMPT\n\n" + systemPrompt + "\n\n# CONVERSATION HISTORY\n\n"
+
+			for (const msg of contextManagementMetadata.truncatedConversationHistory) {
+				fullMarkdownText += `## ROLE: ${msg.role.toUpperCase()}\n`
+				if (typeof msg.content === "string") {
+					fullMarkdownText += msg.content + "\n\n"
+				} else {
+					fullMarkdownText += JSON.stringify(msg.content, null, 2) + "\n\n"
+				}
+			}
+
+			// Dosyayı projenin ana dizinine kaydet
+			const outputPath = path.join(this.cwd, "giden_ham_prompt.md")
+			await fs.writeFile(outputPath, fullMarkdownText, "utf8")
+			Logger.log("Ham prompt başarıyla kaydedildi: " + outputPath)
+		} catch (e) {
+			Logger.error("Prompt kaydedilirken hata oluştu: ", e as Error)
+		}
+		// -----------------------------------------------------
+
 		// Response API requires native tool calls to be enabled
 		const stream = this.api.createMessage(systemPrompt, contextManagementMetadata.truncatedConversationHistory, tools)
 
