@@ -1449,55 +1449,74 @@ export class Task {
 			const vibeCliPath = this.stateManager.getGlobalSettingsKey("vibeCliPath")
 			const vibeProjectPath = this.stateManager.getGlobalSettingsKey("vibeProjectPath")
 
-			let architectSystemPrompt = ""
+			let mapContent = ""
 
 			if (vibeEnabled && vibeCliPath && vibeProjectPath) {
 				await this.say("text", "👷🏻‍♂️ VibeAtlas (Worker) semantik paketi hazırlanıyor...")
 				try {
-					// vibe worker "<task>"
-					// task içindeki çift tırnakları escape ediyoruz
 					const safeTask = task.replace(/"/g, '\\"')
 					const command = `npx tsx "${vibeCliPath}" worker "${safeTask}"`
-
-					// VibeAtlas'ın çalıştığı dizin (vibeProjectPath) önemli olabilir
-					// ancak genellikle workspaceRoot'u (this.cwd) baz alması gerekir.
 					const { stdout, stderr } = await execAsync(command, { cwd: this.cwd })
 
 					if (stdout && stdout.trim().length > 0) {
-						architectSystemPrompt = stdout
+						const workerContextPrompt = stdout
+
+						// --- STAGE 1: İşçi Model (Context Refiner) ---
+						await this.say(
+							"text",
+							"🧬 İşçi model (Worker) semantik bağlamı rafine ediyor ve Mimar için paketliyor...",
+						)
+
+						const workerStream = this.api.createMessage(workerContextPrompt, [])
+						const workerIterator = workerStream[Symbol.asyncIterator]()
+						let refinedContext = ""
+
+						while (true) {
+							const { value, done } = await workerIterator.next()
+							if (done) break
+							if (value.type === "text") {
+								refinedContext += value.text
+							}
+						}
+
+						if (refinedContext.trim().length > 0) {
+							mapContent = refinedContext
+							// Debug logging for refined context
+							const debugRefinedPath = path.join(this.cwd, "mimar_refined_context.md")
+							await fs.writeFile(debugRefinedPath, `# REFINED CONTEXT (WORKER OUTPUT)\n\n${mapContent}`, "utf-8")
+						}
 					} else if (stderr) {
 						throw new Error(stderr)
 					}
 				} catch (e) {
-					Logger.error("VibeAtlas worker failed:", e)
-					await this.say("text", `⚠️ VibeAtlas çalıştırılamadı: ${e.message}. Statik haritaya dönülüyor...`)
+					Logger.error("VibeAtlas worker flow failed:", e)
+					await this.say("text", `⚠️ VibeAtlas/İşçi akışı başarısız oldu: ${e.message}. Statik haritaya dönülüyor...`)
 				}
 			}
 
-			// Eğer VibeAtlas kapalıysa veya hata verdiyse eski usul devam et
-			if (!architectSystemPrompt) {
+			// Eğer VibeAtlas akışı çalışmadıysa veya sonuç dönmediyse eski usul fallback
+			if (!mapContent) {
 				const mapPath = path.join(this.cwd, "semantic_map.vibe")
-				let mapContent = ""
 				try {
 					mapContent = await fs.readFile(mapPath, "utf-8")
 				} catch (e) {
 					await this.say(
 						"text",
-						"⚠️ Semantik harita (`semantic_map.vibe`) bulunamadı ve VibeAtlas devre dışı, Mimar katmanı atlanıyor.",
+						"⚠️ Semantik harita (`semantic_map.vibe`) bulunamadı ve VibeAtlas akışı başarısız, Mimar katmanı atlanıyor.",
 					)
 					return undefined
 				}
-
 				await this.say("text", "👷🏻‍♂️ Mimar (Architect) statik semantik haritayı analiz ediyor...")
+			}
 
-				architectSystemPrompt = `Sen uzman bir Yazılım Mimarı ajanısın. (Architect)
-Görevin, sana verilen "Semantik Kod Haritası"nı (Semantic Code Map) ve "Kullanıcı İsteği"ni okumak, ve bunu gerçekleştirecek olan "İşçi" (Worker) ajana adım adım, detaylı bir Markdown uygulama planı (Implementation Plan) çıkartmaktır.
+			// --- STAGE 2: Mimar Model (Planner) ---
+			const architectSystemPrompt = `Sen uzman bir Yazılım Mimarı ajanısın. (Architect)
+Görevin, sana verilen "Semantik Kod Haritası/Bağlamı"nı (Semantic Code Map/Context) ve "Kullanıcı İsteği"ni okumak, ve bunu gerçekleştirecek olan "İşçi" (Worker) ajana adım adım, detaylı bir Markdown uygulama planı (Implementation Plan) çıkartmaktır.
 Kesinlikle doğrudan kod yazma. Sadece hangi dosyalara gidileceğini, hangi bileşenlerin değişeceğini ve mimari adımları planla.
 
-Semantik Kod Haritası:
+Semantik Kod Haritası / Rafine Bağlam:
 ${mapContent}
 `
-			}
 
 			const messages: ClineStorageMessage[] = [
 				{
