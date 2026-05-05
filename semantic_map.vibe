@@ -1,0 +1,3 @@
+[App - [UI] LoginView: Kullanıcı adı ve şifre ile giriş yapma ekranı. Form validasyonları barındırır.] | Meta: LoginView, handleSubmit, api_call_login
+[App - [Logic] AuthService: Login işlemlerinin JWT token ile yönetildiği asenkron servis katmanı.] | Meta: AuthService, performLogin, setToken, API_LOGIN
+[App - [Data] UserStore: Kullanıcı oturum bilgilerini tutan Zustand/Redux state dosyası.] | Meta: useUserStore, setUser, logout

@@ -1,5 +1,6 @@
 import { UpdateSettingsRequest } from "@shared/proto/cline/state"
 import { memo, type ReactNode, useCallback } from "react"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
@@ -227,6 +228,9 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		doubleCheckCompletionEnabled,
 		lazyTeammateModeEnabled,
 		showFeatureTips,
+		vibeEnabled,
+		vibeCliPath,
+		vibeProjectPath,
 	} = useExtensionState()
 
 	const handleFocusChainIntervalChange = useCallback(
@@ -359,6 +363,59 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 									remoteTooltip="This setting is managed by your organization's remote configuration"
 								/>
 							))}
+						</div>
+					</div>
+				</div>
+
+				{/* VibeAtlas Architect */}
+				<div>
+					<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">
+						Architect & VibeAtlas
+					</div>
+					<div className="relative p-3 my-3 rounded-md border border-editor-widget-border/50" id="vibe-settings">
+						<div className="space-y-4">
+							<FeatureRow
+								checked={vibeEnabled}
+								description="Enable VibeAtlas semantic mapping for the Architect layer."
+								label="VibeAtlas Integration"
+								onChange={(checked) => updateSetting("vibeEnabled", checked)}
+							/>
+
+							{vibeEnabled && (
+								<>
+									<div className="space-y-2">
+										<Label className="text-xs font-medium text-foreground">VibeAtlas Project Path</Label>
+										<div className="flex gap-2">
+											<Input
+												className="flex-1"
+												onChange={(e) => updateSetting("vibeProjectPath", e.target.value)}
+												placeholder="C:\path\to\test15"
+												value={vibeProjectPath || ""}
+											/>
+										</div>
+										<p className="text-[10px] text-muted-foreground">
+											The root directory of your VibeAtlas installation.
+										</p>
+									</div>
+
+									<div className="space-y-2">
+										<Label className="text-xs font-medium text-foreground">
+											VibeAtlas CLI Path (src/cli.ts)
+										</Label>
+										<div className="flex gap-2">
+											<Input
+												className="flex-1"
+												onChange={(e) => updateSetting("vibeCliPath", e.target.value)}
+												placeholder="C:\path\to\test15\src\cli.ts"
+												value={vibeCliPath || ""}
+											/>
+										</div>
+										<p className="text-[10px] text-muted-foreground">
+											The path to the VibeAtlas CLI source file.
+										</p>
+									</div>
+								</>
+							)}
 						</div>
 					</div>
 				</div>

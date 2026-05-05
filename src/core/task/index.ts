@@ -48,6 +48,11 @@ import { formatContentBlockToMarkdown } from "@integrations/misc/export-markdown
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { ITerminalManager } from "@integrations/terminal/types"
+import { exec } from "child_process"
+import { promisify } from "util"
+
+const execAsync = promisify(exec)
+
 import { BrowserSession } from "@services/browser/BrowserSession"
 import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import { featureFlagsService } from "@services/feature-flags"
@@ -1440,28 +1445,59 @@ export class Task {
 	// [CUSTOM CHANGE] --- Mimar Katmanı (Architect Layer) Fonksiyonu ---
 	private async runArchitectLayer(task: string): Promise<string | undefined> {
 		try {
-			const mapPath = path.join(this.cwd, "semantic_map.vibe")
-			let mapContent = ""
-			try {
-				mapContent = await fs.readFile(mapPath, "utf-8")
-			} catch (e) {
-				await this.say(
-					"text",
-					"⚠️ Semantik harita (`semantic_map.vibe`) bulunamadı, Mimar katmanı atlanıyor. Lütfen dosyanın proje kök dizininde olduğundan emin olun.",
-				)
-				return undefined
+			const vibeEnabled = this.stateManager.getGlobalSettingsKey("vibeEnabled")
+			const vibeCliPath = this.stateManager.getGlobalSettingsKey("vibeCliPath")
+			const vibeProjectPath = this.stateManager.getGlobalSettingsKey("vibeProjectPath")
+
+			let architectSystemPrompt = ""
+
+			if (vibeEnabled && vibeCliPath && vibeProjectPath) {
+				await this.say("text", "👷🏻‍♂️ VibeAtlas (Worker) semantik paketi hazırlanıyor...")
+				try {
+					// vibe worker "<task>"
+					// task içindeki çift tırnakları escape ediyoruz
+					const safeTask = task.replace(/"/g, '\\"')
+					const command = `npx tsx "${vibeCliPath}" worker "${safeTask}"`
+
+					// VibeAtlas'ın çalıştığı dizin (vibeProjectPath) önemli olabilir
+					// ancak genellikle workspaceRoot'u (this.cwd) baz alması gerekir.
+					const { stdout, stderr } = await execAsync(command, { cwd: this.cwd })
+
+					if (stdout && stdout.trim().length > 0) {
+						architectSystemPrompt = stdout
+					} else if (stderr) {
+						throw new Error(stderr)
+					}
+				} catch (e) {
+					Logger.error("VibeAtlas worker failed:", e)
+					await this.say("text", `⚠️ VibeAtlas çalıştırılamadı: ${e.message}. Statik haritaya dönülüyor...`)
+				}
 			}
 
-			// Show a message to the user that Architect is thinking
-			await this.say("text", "👷🏻‍♂️ Mimar (Architect) semantik haritayı analiz edip uygulama planı çıkartıyor...")
+			// Eğer VibeAtlas kapalıysa veya hata verdiyse eski usul devam et
+			if (!architectSystemPrompt) {
+				const mapPath = path.join(this.cwd, "semantic_map.vibe")
+				let mapContent = ""
+				try {
+					mapContent = await fs.readFile(mapPath, "utf-8")
+				} catch (e) {
+					await this.say(
+						"text",
+						"⚠️ Semantik harita (`semantic_map.vibe`) bulunamadı ve VibeAtlas devre dışı, Mimar katmanı atlanıyor.",
+					)
+					return undefined
+				}
 
-			const architectSystemPrompt = `Sen uzman bir Yazılım Mimarı ajanısın. (Architect)
+				await this.say("text", "👷🏻‍♂️ Mimar (Architect) statik semantik haritayı analiz ediyor...")
+
+				architectSystemPrompt = `Sen uzman bir Yazılım Mimarı ajanısın. (Architect)
 Görevin, sana verilen "Semantik Kod Haritası"nı (Semantic Code Map) ve "Kullanıcı İsteği"ni okumak, ve bunu gerçekleştirecek olan "İşçi" (Worker) ajana adım adım, detaylı bir Markdown uygulama planı (Implementation Plan) çıkartmaktır.
 Kesinlikle doğrudan kod yazma. Sadece hangi dosyalara gidileceğini, hangi bileşenlerin değişeceğini ve mimari adımları planla.
 
 Semantik Kod Haritası:
 ${mapContent}
 `
+			}
 
 			const messages: ClineStorageMessage[] = [
 				{

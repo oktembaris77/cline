@@ -270,6 +270,9 @@ const USER_SETTINGS_FIELDS = {
 	doubleCheckCompletionEnabled: { default: false as boolean },
 	lazyTeammateModeEnabled: { default: false as boolean },
 	showFeatureTips: { default: true as boolean },
+	vibeEnabled: { default: false as boolean },
+	vibeCliPath: { default: "C:\\Users\\b4r1s\\Desktop\\test\\test15\\src\\cli.ts" as string | undefined },
+	vibeProjectPath: { default: "C:\\Users\\b4r1s\\Desktop\\test\\test15" as string | undefined },
 
 	// OpenTelemetry configuration
 	openTelemetryEnabled: { default: true as boolean },
