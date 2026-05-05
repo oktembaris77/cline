@@ -1150,6 +1150,18 @@ export class Task {
 			Logger.error("Failed to record environment metadata:", error)
 		}
 
+		// [CUSTOM CHANGE] --- ARCHITECT LAYER INJECTION ---
+		if (task) {
+			const architectPlan = await this.runArchitectLayer(task)
+			if (architectPlan) {
+				userContent.push({
+					type: "text",
+					text: `<architect_plan>\n${architectPlan}\n</architect_plan>\n\nYou are the Worker. You MUST strictly follow the <architect_plan> provided above to fulfill the user's request. Do not deviate from the plan.`,
+				})
+			}
+		}
+		// --------------------------------------------------
+
 		await this.initiateTaskLoop(userContent)
 	}
 
@@ -1424,6 +1436,93 @@ export class Task {
 		await this.messageStateHandler.overwriteApiConversationHistory(modifiedApiConversationHistory)
 		await this.initiateTaskLoop(newUserContent)
 	}
+
+	// [CUSTOM CHANGE] --- Mimar Katmanı (Architect Layer) Fonksiyonu ---
+	private async runArchitectLayer(task: string): Promise<string | undefined> {
+		try {
+			const mapPath = path.join(this.cwd, "semantic_map.vibe")
+			let mapContent = ""
+			try {
+				mapContent = await fs.readFile(mapPath, "utf-8")
+			} catch (e) {
+				await this.say(
+					"text",
+					"⚠️ Semantik harita (`semantic_map.vibe`) bulunamadı, Mimar katmanı atlanıyor. Lütfen dosyanın proje kök dizininde olduğundan emin olun.",
+				)
+				return undefined
+			}
+
+			// Show a message to the user that Architect is thinking
+			await this.say("text", "👷🏻‍♂️ Mimar (Architect) semantik haritayı analiz edip uygulama planı çıkartıyor...")
+
+			const architectSystemPrompt = `Sen uzman bir Yazılım Mimarı ajanısın. (Architect)
+Görevin, sana verilen "Semantik Kod Haritası"nı (Semantic Code Map) ve "Kullanıcı İsteği"ni okumak, ve bunu gerçekleştirecek olan "İşçi" (Worker) ajana adım adım, detaylı bir Markdown uygulama planı (Implementation Plan) çıkartmaktır.
+Kesinlikle doğrudan kod yazma. Sadece hangi dosyalara gidileceğini, hangi bileşenlerin değişeceğini ve mimari adımları planla.
+
+Semantik Kod Haritası:
+${mapContent}
+`
+
+			const messages: ClineStorageMessage[] = [
+				{
+					role: "user",
+					content: task,
+					ts: Date.now(),
+				},
+			]
+
+			// --- DEBUG LOGGING: Save request ---
+			const debugLogPath = path.join(this.cwd, "mimar_debug.md")
+			try {
+				const debugRequestContent = `# MIMAR DEBUG LOG\n\n## SYSTEM PROMPT\n${architectSystemPrompt}\n\n## USER PROMPT\n${task}\n`
+				await fs.writeFile(debugLogPath, debugRequestContent, "utf-8")
+			} catch (e) {
+				Logger.error("Failed to write mimar_debug.md request:", e)
+			}
+
+			const stream = this.api.createMessage(architectSystemPrompt, messages)
+			const iterator = stream[Symbol.asyncIterator]()
+			let architectPlan = ""
+			let architectUsage: { inputTokens: number; outputTokens: number; cost?: number } | undefined
+
+			while (true) {
+				const { value, done } = await iterator.next()
+				if (done) break
+				if (value.type === "text") {
+					architectPlan += value.text
+				}
+				if (value.type === "usage") {
+					architectUsage = {
+						inputTokens: value.inputTokens,
+						outputTokens: value.outputTokens,
+						cost: value.totalCost,
+					}
+				}
+			}
+
+			// --- DEBUG LOGGING: Save response ---
+			try {
+				await fs.appendFile(
+					debugLogPath,
+					`\n## ARCHITECT PLAN\n${architectPlan}\n\n## USAGE\n${JSON.stringify(architectUsage, null, 2)}`,
+					"utf-8",
+				)
+			} catch (e) {
+				Logger.error("Failed to append to mimar_debug.md:", e)
+			}
+
+			const usageText = architectUsage
+				? `\n\n(Mimar Kullanımı: In: ${architectUsage.inputTokens}, Out: ${architectUsage.outputTokens}${architectUsage.cost ? `, Maliyet: $${architectUsage.cost.toFixed(4)}` : ""})`
+				: "--"
+
+			await this.say("text", `📐 Mimarın Planı Çıkarıldı (Arka planda işçiye iletildi):${usageText}\n\n${architectPlan}`)
+			return architectPlan
+		} catch (error) {
+			Logger.error("Error in architect layer:", error)
+			return undefined
+		}
+	}
+	// ------------------------------------------------------------------
 
 	private async initiateTaskLoop(userContent: ClineContent[]): Promise<void> {
 		let nextUserContent = userContent
@@ -1992,7 +2091,7 @@ export class Task {
 			// saves task history item which we use to keep track of conversation history deleted range
 		}
 
-		// --- API'ye Giden Ham Metni Markdown Olarak Kaydetme ---
+		// [CUSTOM CHANGE] --- API'ye Giden Ham Metni Markdown Olarak Kaydetme ---
 		try {
 			const fs = require("fs/promises")
 			const path = require("path")
@@ -2015,7 +2114,7 @@ export class Task {
 		} catch (e) {
 			Logger.error("Prompt kaydedilirken hata oluştu: ", e as Error)
 		}
-		// -----------------------------------------------------
+		// ----------------------------------------------------- [END CUSTOM CHANGE]
 
 		// Response API requires native tool calls to be enabled
 		const stream = this.api.createMessage(systemPrompt, contextManagementMetadata.truncatedConversationHistory, tools)
